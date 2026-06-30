@@ -1408,6 +1408,13 @@ def fetch_merged_shares():
     # 添加快照日期列
     combined['snapshot_date'] = snapshot_date
 
+    # 初始化新增和涨幅列（必须提前创建，否则后续赋值会报错）
+    combined['shares_add'] = None
+    combined['shares_change'] = None
+
+    # 添加快照日期列
+    combined['snapshot_date'] = snapshot_date
+
     conn = get_db()
     cursor = conn.cursor()
 
