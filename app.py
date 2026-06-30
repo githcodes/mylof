@@ -1267,11 +1267,14 @@ def fetch_sh_shares():
     return df
 
 
-def fetch_sz_shares(retries=3, timeout=15):
+def fetch_sz_shares(retries=5, timeout=30):
     """
     从深交所官方API获取LOF基金场内份额数据，返回最新交易日的份额。
-    支持重试和超时设置。
+    增加超时和重试次数，并修正数据解析错误。
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     base_url = 'https://www.szse.cn/api/report/ShowReport/data'
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -1282,9 +1285,11 @@ def fetch_sz_shares(retries=3, timeout=15):
     
     for attempt in range(retries):
         try:
+            logger.info(f"深交所API第 {attempt+1}/{retries} 次尝试，超时 {timeout}s")
             page_no = 1
             all_data = []
             latest_date = None
+            
             while True:
                 params = {
                     'SHOWTYPE': 'JSON',
@@ -1296,28 +1301,45 @@ def fetch_sz_shares(retries=3, timeout=15):
                 resp = requests.get(base_url, headers=headers, params=params, timeout=timeout)
                 resp.raise_for_status()
                 data = resp.json()
+                
+                # 解析数据（修正错误）
+                rows = []
                 if isinstance(data, list) and len(data) > 0:
-                    rows = data['fund_code'].get('data', [])
-                    if not rows:
-                        break
-                    for row in rows:
-                        size_date = row.get('size_date')
-                        if size_date:
-                            if latest_date is None or size_date > latest_date:
-                                latest_date = size_date
-                    all_data.extend(rows)
-                    if len(rows) < 20:
-                        break
-                    page_no += 1
-                    time.sleep(0.2)
+                    # data 是一个列表，通常第一个元素包含 'data' 字段
+                    first_item = data[0]
+                    if isinstance(first_item, dict):
+                        rows = first_item.get('data', [])
+                    else:
+                        rows = data  # 如果直接是列表，则作为数据行
+                elif isinstance(data, dict):
+                    # 如果返回的是字典，尝试多个可能的键
+                    rows = data.get('data', []) or data.get('result', []) or data.get('rows', [])
                 else:
+                    logger.warning(f"未知返回格式: {type(data)}")
                     break
+                
+                if not rows:
+                    break
+                
+                for row in rows:
+                    size_date = row.get('size_date')
+                    if size_date:
+                        if latest_date is None or size_date > latest_date:
+                            latest_date = size_date
+                all_data.extend(rows)
+                
+                if len(rows) < 20:
+                    break
+                page_no += 1
+                time.sleep(0.3)  # 略微延长间隔
             
             if not all_data or not latest_date:
+                logger.warning(f"第 {attempt+1} 次尝试未获取到有效数据")
                 if attempt < retries - 1:
-                    time.sleep(2)
+                    time.sleep(5)  # 增加重试间隔
                     continue
-                return pd.DataFrame()
+                else:
+                    return pd.DataFrame()
             
             # 过滤出最新日期的记录
             filtered = [item for item in all_data if item.get('size_date') == latest_date]
@@ -1337,19 +1359,24 @@ def fetch_sz_shares(retries=3, timeout=15):
                         'fund_shares': fund_shares,
                         'date': latest_date
                     })
+            
             df = pd.DataFrame(records)
             if not df.empty:
                 df.set_index('fund_code', inplace=True)
                 df = df[df['fund_shares'] > 0]
-            logging.info(f"深交所份额抓取完成，共 {len(df)} 只基金，日期 {latest_date}")
+            logger.info(f"深交所份额抓取完成，共 {len(df)} 只基金，日期 {latest_date}")
             return df
+        
         except Exception as e:
-            logging.warning(f"深交所API请求失败 (尝试 {attempt+1}/{retries}): {e}")
+            logger.warning(f"深交所API请求失败 (尝试 {attempt+1}/{retries}): {e}")
             if attempt < retries - 1:
-                time.sleep(3)
+                time.sleep(5)  # 等待更长时间后重试
             else:
+                logger.error(f"深交所API所有重试均失败: {e}")
                 return pd.DataFrame()
+    
     return pd.DataFrame()
+
 
 def fetch_merged_shares():
     """
