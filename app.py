@@ -1672,7 +1672,7 @@ def supplement_fund_details():
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT fund_code FROM lof_funds")
-        db_codes = {row[0] for row in cursor.fetchall()}
+        db_codes = {row['fund_code'] for row in cursor.fetchall()}
         logger.info(f"数据库中有 {len(db_codes)} 只基金")
 
         # 提取基金代码
