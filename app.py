@@ -4105,12 +4105,21 @@ def api_compare():
 
 @app.route('/api/refresh_nav')
 def refresh_nav():
-    """手动触发净值、估算净值及溢价率刷新"""
-    supplement_fund_details()
-    update_premium_rate()
-    update_estimated_nav()
-    update_estimated_premium_rate()
-    return "净值、估算净值刷新任务已启动"
+    """手动触发净值、估算净值及溢价率刷新（异步）"""
+    def task():
+        try:
+            supplement_fund_details()
+            update_premium_rate()
+            update_estimated_nav()
+            update_estimated_premium_rate()
+            print("✅ 净值刷新任务完成")
+        except Exception as e:
+            print(f"❌ 净值刷新任务失败: {e}")
+    
+    threading.Thread(target=task).start()
+    return "净值、估算净值刷新任务已启动（后台运行）"
+
+
 
 @app.route('/api/refresh_holdings')
 def refresh_holdings():
