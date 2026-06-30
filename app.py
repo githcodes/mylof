@@ -4315,6 +4315,116 @@ def admin_patch_lof_history():
     return "✅ 已启动历史数据补全任务，请查看后台日志"
 
 
+# 全局标志，避免重复执行（保留用于路由）
+_updating_all_latest = False
+
+def do_update_all_latest():
+    """
+    执行全量更新所有基金最新数据的实际任务（不依赖 Flask 请求上下文）
+    由定时任务和手动路由共同调用
+    """
+    print(f"{datetime.now()}: 开始多线程全量更新所有基金的最新一天数据...")
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT fund_code FROM lof_funds")
+    fund_codes = [row['fund_code'] for row in cursor.fetchall()]
+    conn.close()
+    print(f"共 {len(fund_codes)} 只基金需要更新，并发数=5")
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
+
+    results = []
+    lock = threading.Lock()
+
+    def fetch_one(fund_code):
+        try:
+            record = fetch_latest_jisilu_history(fund_code)
+            if not record or record.get('日期') is None:
+                with lock:
+                    results.append((fund_code, None, "无数据"))
+                return
+            with lock:
+                results.append((fund_code, record, None))
+        except Exception as e:
+            with lock:
+                results.append((fund_code, None, str(e)))
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(fetch_one, code) for code in fund_codes]
+        for future in as_completed(futures):
+            future.result()
+
+    print(f"数据获取完成，开始写入数据库...")
+
+    success_count = 0
+    fail_count = 0
+    today = datetime.now().strftime('%Y-%m-%d')
+
+    for fund_code, record, err in results:
+        if err or record is None:
+            print(f"  ⚠️ {fund_code} 获取失败: {err or '无数据'}")
+            fail_count += 1
+            continue
+
+        date_str = record['日期']
+        close = record['收盘价']
+        nav = record['净值']
+        index_change = record.get('指数涨幅')
+        heavy_change = record.get('重仓涨幅')
+        nav_date = record.get('净值日期')
+        premium_rate = record.get('溢价率')
+        volume = record.get('成交额(万元)')
+        shares = record.get('场内份额(万份)')
+        shares_add = record.get('场内新增(万份)')
+        shares_change = record.get('份额涨幅')
+
+        # 获取当日最低价
+        low_value = None
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT day_low FROM lof_funds WHERE fund_code = %s", (fund_code,))
+        row = cursor.fetchone()
+        if row and row['day_low'] is not None:
+            low_value = row['day_low']
+        conn.close()
+
+        success = insert_or_replace_lof_history(
+            fund_code=fund_code,
+            date=date_str,
+            close=close,
+            nav=nav,
+            nav_date=nav_date,
+            index_change=index_change,
+            heavy_change=heavy_change,
+            premium_rate=premium_rate,
+            volume_amount=volume,
+            fund_shares=shares,
+            shares_add=shares_add,
+            shares_change=shares_change,
+            low=low_value,
+        )
+        if success:
+            success_count += 1
+        else:
+            fail_count += 1
+
+        if (success_count + fail_count) % 10 == 0:
+            print(f"已写入 {success_count + fail_count} 只，成功 {success_count}，失败 {fail_count}")
+
+    print(f"全量最新数据更新完成，成功: {success_count}, 失败: {fail_count}")
+
+    print("开始重新计算所有基金的动态加权字段...")
+    conn2 = get_db()
+    cur2 = conn2.cursor()
+    cur2.execute("SELECT DISTINCT fund_code FROM lof_history")
+    funds_with_history = cur2.fetchall()
+    conn2.close()
+    for (code,) in funds_with_history:
+        calculate_dynamic_fields_for_fund(code)
+    print("动态加权字段计算完成")
+
+
 
 @app.route('/admin/update_all_latest')
 def update_all_latest():
@@ -4325,113 +4435,14 @@ def update_all_latest():
 
     def task():
         try:
-            print(f"{datetime.now()}: 开始多线程全量更新所有基金的最新一天数据...")
-            conn = get_db()
-            cursor = conn.cursor()
-            cursor.execute("SELECT fund_code FROM lof_funds")
-            fund_codes = [row['fund_code'] for row in cursor.fetchall()]
-            conn.close()
-            print(f"共 {len(fund_codes)} 只基金需要更新，并发数=5")
-
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-
-            results = []
-            lock = threading.Lock()
-
-            def fetch_one(fund_code):
-                try:
-                    record = fetch_latest_jisilu_history(fund_code)
-                    if not record or record.get('日期') is None:
-                        with lock:
-                            results.append((fund_code, None, "无数据"))
-                        return
-                    with lock:
-                        results.append((fund_code, record, None))
-                except Exception as e:
-                    with lock:
-                        results.append((fund_code, None, str(e)))
-
-            with ThreadPoolExecutor(max_workers=5) as executor:
-                futures = [executor.submit(fetch_one, code) for code in fund_codes]
-                for future in as_completed(futures):
-                    future.result()
-
-            print(f"数据获取完成，开始写入数据库...")
-
-            success_count = 0
-            fail_count = 0
-            today = datetime.now().strftime('%Y-%m-%d')
-
-            for fund_code, record, err in results:
-                if err or record is None:
-                    print(f"  ⚠️ {fund_code} 获取失败: {err or '无数据'}")
-                    fail_count += 1
-                    continue
-
-                date_str = record['日期']
-                close = record['收盘价']
-                nav = record['净值']
-                index_change = record.get('指数涨幅')
-                heavy_change = record.get('重仓涨幅')
-                nav_date = record.get('净值日期')
-                premium_rate = record.get('溢价率')
-                volume = record.get('成交额(万元)')
-                shares = record.get('场内份额(万份)')
-                shares_add = record.get('场内新增(万份)')
-                shares_change = record.get('份额涨幅')
-
-                # ---------- 新增：获取当日最低价 ----------
-                low_value = None
-               
-                conn = get_db()
-                cursor = conn.cursor()
-                cursor.execute("SELECT day_low FROM lof_funds WHERE fund_code = %s", (fund_code,))
-                row = cursor.fetchone()
-                if row and row['day_low'] is not None:
-                    low_value = row['day_low']
-                conn.close()
-                # -------------------------------------------------
-
-                success = insert_or_replace_lof_history(
-                    fund_code=fund_code,
-                    date=date_str,
-                    close=close,
-                    nav=nav,
-                    nav_date=nav_date,
-                    index_change=index_change,
-                    heavy_change=heavy_change,
-                    premium_rate=premium_rate,
-                    volume_amount=volume,
-                    fund_shares=shares,
-                    shares_add=shares_add,
-                    shares_change=shares_change,
-                    low=low_value,   # 传入最低价
-                )
-                if success:
-                    success_count += 1
-                else:
-                    fail_count += 1
-
-                if (success_count + fail_count) % 10 == 0:
-                    print(f"已写入 {success_count + fail_count} 只，成功 {success_count}，失败 {fail_count}")
-
-            print(f"全量最新数据更新完成，成功: {success_count}, 失败: {fail_count}")
-
-            print("开始重新计算所有基金的动态加权字段...")
-            conn2 = get_db()
-            cur2 = conn2.cursor()
-            cur2.execute("SELECT DISTINCT fund_code FROM lof_history")
-            funds_with_history = cur2.fetchall()
-            conn2.close()
-            for (code,) in funds_with_history:
-                calculate_dynamic_fields_for_fund(code)
-            print("动态加权字段计算完成")
+            do_update_all_latest()
         finally:
             global _updating_all_latest
             _updating_all_latest = False
 
     threading.Thread(target=task).start()
     return "✅ 已启动多线程全量最新数据更新任务，请查看后台日志"
+
 
 
 @app.route('/api/refresh_index')
@@ -4569,7 +4580,15 @@ scheduler.add_job(func=update_estimated_premium_rate, trigger="interval", minute
 scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour='9-15', minute='*/30', id='missing_funds_timer')
 # 每晚 22:00 运行一次缺失基金处理
 scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour=22, minute=0, id='missing_funds_night')
-
+# 每天凌晨 1:00 执行全量最新数据更新
+scheduler.add_job(
+    func=do_update_all_latest,
+    trigger="cron",
+    hour=1,
+    minute=0,
+    id='daily_update_all_latest'
+)
+print("已添加定时任务：每天凌晨 1:00 更新所有基金最新数据")
 
 
 
