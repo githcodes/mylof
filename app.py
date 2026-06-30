@@ -4480,6 +4480,14 @@ scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour=22, 
 scheduler.start()
 
 
+# ===== 在 gunicorn 环境下自动初始化数据库（表结构） =====
+try:
+    init_db()
+    init_missing_funds()
+    print("✅ PostgreSQL 数据库表初始化完成")
+except Exception as e:
+    print(f"❌ 数据库初始化失败: {e}")
+
 
 if __name__ == '__main__':
     import os
