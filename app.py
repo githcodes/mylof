@@ -4617,6 +4617,23 @@ scheduler.add_job(
 )
 print("已添加定时任务：每天凌晨 1:00 更新所有基金最新数据")
 
+# 早上 6:00 执行全量最新数据更新
+scheduler.add_job(
+    func=do_update_all_latest,
+    trigger="cron",
+    hour=6,
+    minute=0,
+    id='morning_update_all_latest'
+)
+
+# 早上 7:00 执行缺失基金高级处理
+scheduler.add_job(
+    func=process_missing_funds_advanced,
+    trigger="cron",
+    hour=7,
+    minute=0,
+    id='morning_process_missing'
+
 
 
 scheduler.start()
