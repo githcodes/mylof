@@ -405,6 +405,13 @@ def process_missing_funds_advanced():
             shares_add = shares_row.get('shares_add')
             shares_change = shares_row.get('shares_change')
             snapshot_date = shares_row.get('snapshot_date', today)
+            # 将 numpy 类型转换为 Python 原生类型
+            if fund_shares is not None:
+                fund_shares = float(fund_shares)
+            if shares_add is not None:
+                shares_add = float(shares_add)
+            if shares_change is not None:
+                shares_change = float(shares_change)
             print(f"  ✅ 份额获取成功: {fund_shares} 万份 (日期 {snapshot_date})")
         else:
             print(f"  ⚠️ 未获取到份额数据")
