@@ -1607,124 +1607,144 @@ def backfill_shares_from_snapshot():
 
 
 def supplement_fund_details():
-    """使用 AKShare 补充基金的净值、申购状态、赎回状态、日限购金额等信息，同时将净值数据同步到 fund_nav 表（批量优化版）。"""
-    print(f"{datetime.now()}: [AKShare] 开始补充净值/申购状态...")
+    """使用 AKShare 补充基金的净值，分批处理并增强日志，便于排查问题"""
+    import logging
+    import traceback
+    logger = logging.getLogger(__name__)
+    logger.info("开始补充净值/申购状态...")
     try:
         purchase_df = ak.fund_purchase_em()
         if purchase_df.empty:
-            print("AKShare 获取申购状态数据为空")
+            logger.warning("AKShare 获取申购状态数据为空")
             return
-        print(f"AKShare 返回 {len(purchase_df)} 条记录")
-        print(f"AKShare 数据列名: {purchase_df.columns.tolist()}")  # 调试
-        # 打印前几行示例
-        print(purchase_df.head(2).to_string())
+        logger.info(f"AKShare 返回 {len(purchase_df)} 条记录")
+        logger.info(f"数据列名: {purchase_df.columns.tolist()}")
+        # 打印前两条示例数据（可能很长，但能帮助调试）
+        logger.info(f"示例数据:\n{purchase_df.head(2).to_string()}")
 
         conn = get_db()
         cursor = conn.cursor()
         # 获取数据库中所有基金代码
         cursor.execute("SELECT fund_code FROM lof_funds")
         db_codes = {row[0] for row in cursor.fetchall()}
-        print(f"数据库中有 {len(db_codes)} 只基金，示例: {list(db_codes)[:5]}")
+        logger.info(f"数据库中有 {len(db_codes)} 只基金")
 
         # 提取基金代码（6位数字）
         try:
+            # 确保列名存在
+            if '基金代码' not in purchase_df.columns:
+                raise KeyError("列名 '基金代码' 不存在，实际列名: " + str(purchase_df.columns.tolist()))
             extracted = purchase_df['基金代码'].str.extract(r'(\d{6})')[0]
-            print(f"提取后的基金代码示例: {extracted.head(3).tolist()}")
             df_filtered = purchase_df[extracted.isin(db_codes)]
         except Exception as e:
-            print(f"提取基金代码时出错: {e}")
+            logger.error(f"提取基金代码时出错: {e}", exc_info=True)
             raise
 
-        print(f"过滤后匹配到 {len(df_filtered)} 条记录")
+        logger.info(f"过滤后匹配到 {len(df_filtered)} 条记录")
         if df_filtered.empty:
-            print("没有需要更新的基金")
+            logger.info("没有需要更新的基金")
             conn.close()
             return
 
         # 准备批量更新的数据
-        fund_updates = []   # 用于 lof_funds 的 (nav, nav_date, purchase_status, redemption_status, daily_limit, code)
-        nav_inserts = []    # 用于 fund_nav 的 (code, nav_date, nav)
+        fund_updates = []   # (nav, nav_date, purchase_status, redemption_status, daily_limit, code)
+        nav_inserts = []    # (code, nav_date, nav)
 
-        # 先获取 fund_nav 中已存在的 (code, nav_date) 集合，用于跳过
+        # 获取已存在的净值记录，用于跳过
         cursor.execute("SELECT fund_code, nav_date FROM fund_nav")
         existing_nav = {(row[0], row[1]) for row in cursor.fetchall()}
 
-        for _, row in df_filtered.iterrows():
-            raw_code = row.get('基金代码', '')
-            if not raw_code:
-                continue
-            match = re.search(r'(\d{6})', str(raw_code))
-            if not match:
-                continue
-            code = match.group(1)
-            if code not in db_codes:
-                continue
+        # 分批处理，每批最多 300 条，减少内存占用和单次事务大小
+        batch_size = 300
+        total = len(df_filtered)
+        for start in range(0, total, batch_size):
+            batch = df_filtered.iloc[start:start+batch_size]
+            logger.info(f"处理批次 {start//batch_size + 1}/{(total-1)//batch_size+1}，共 {len(batch)} 条")
+            fund_updates.clear()
+            nav_inserts.clear()
+            for _, row in batch.iterrows():
+                raw_code = row.get('基金代码', '')
+                if not raw_code:
+                    continue
+                match = re.search(r'(\d{6})', str(raw_code))
+                if not match:
+                    continue
+                code = match.group(1)
+                if code not in db_codes:
+                    continue
 
-            nav = row.get('最新净值/万份收益')
-            if nav is not None and nav != '-':
-                try:
-                    nav = float(nav)
-                except:
+                nav = row.get('最新净值/万份收益')
+                if nav is not None and nav != '-':
+                    try:
+                        nav = float(nav)
+                    except:
+                        nav = None
+                else:
                     nav = None
-            else:
-                nav = None
 
-            if nav is None:
-                continue
+                if nav is None:
+                    continue
 
-            nav_date = row.get('最新净值/万份收益-报告时间')
-            if nav_date and isinstance(nav_date, str):
-                nav_date = nav_date.strip()
-                if re.match(r'\d{2}-\d{2}', nav_date):   # 如 '06-24'
-                    current_year = datetime.now().strftime('%Y')
-                    nav_date = f"{current_year}-{nav_date}"
-                # 如果已是 YYYY-MM-DD，则保持
-            purchase_status = row.get('申购状态')
-            redemption_status = row.get('赎回状态')
-            daily_limit = row.get('日累计限定金额')
-            if daily_limit is not None and daily_limit != '-':
-                try:
-                    daily_limit = float(daily_limit)
-                except:
+                nav_date = row.get('最新净值/万份收益-报告时间')
+                if nav_date and isinstance(nav_date, str):
+                    nav_date = nav_date.strip()
+                    if re.match(r'\d{2}-\d{2}', nav_date):   # 如 '06-24'
+                        current_year = datetime.now().strftime('%Y')
+                        nav_date = f"{current_year}-{nav_date}"
+                purchase_status = row.get('申购状态')
+                redemption_status = row.get('赎回状态')
+                daily_limit = row.get('日累计限定金额')
+                if daily_limit is not None and daily_limit != '-':
+                    try:
+                        daily_limit = float(daily_limit)
+                    except:
+                        daily_limit = None
+                else:
                     daily_limit = None
-            else:
-                daily_limit = None
 
-            # 更新 lof_funds（使用 ON CONFLICT）
-            fund_updates.append((nav, nav_date, purchase_status, redemption_status, daily_limit, code))
+                fund_updates.append((nav, nav_date, purchase_status, redemption_status, daily_limit, code))
 
-            # 同步到 fund_nav（仅当不存在时）
-            if nav_date and nav is not None:
-                key = (code, nav_date)
-                if key not in existing_nav:
-                    nav_inserts.append((code, nav_date, nav))
-                    existing_nav.add(key)  # 避免重复添加
+                # 同步到 fund_nav（仅当不存在时）
+                if nav_date and nav is not None:
+                    key = (code, nav_date)
+                    if key not in existing_nav:
+                        nav_inserts.append((code, nav_date, nav))
+                        existing_nav.add(key)  # 避免重复添加
 
-        # 批量更新 lof_funds
-        if fund_updates:
-            cursor.executemany('''
-                UPDATE lof_funds 
-                SET nav=%s, nav_date=%s, purchase_status=%s, redemption_status=%s, daily_purchase_limit=%s
-                WHERE fund_code=%s
-            ''', fund_updates)
-            print(f"更新了 {len(fund_updates)} 只基金的净值/状态")
+            # 每批处理完后，立即执行更新，防止累积太多数据
+            if fund_updates:
+                try:
+                    cursor.executemany('''
+                        UPDATE lof_funds 
+                        SET nav=%s, nav_date=%s, purchase_status=%s, redemption_status=%s, daily_purchase_limit=%s
+                        WHERE fund_code=%s
+                    ''', fund_updates)
+                    logger.info(f"本批次更新了 {len(fund_updates)} 只基金的净值/状态")
+                except Exception as e:
+                    logger.error(f"更新数据库时出错: {e}", exc_info=True)
+                    raise
 
-        # 批量插入 fund_nav
-        if nav_inserts:
-            cursor.executemany(
-                "INSERT INTO fund_nav (fund_code, nav_date, nav) VALUES (%s, %s, %s) ON CONFLICT (fund_code, nav_date) DO NOTHING",
-                nav_inserts
-            )
-            print(f"新增 {len(nav_inserts)} 条净值记录到 fund_nav")
+            if nav_inserts:
+                try:
+                    cursor.executemany(
+                        "INSERT INTO fund_nav (fund_code, nav_date, nav) VALUES (%s, %s, %s) ON CONFLICT (fund_code, nav_date) DO NOTHING",
+                        nav_inserts
+                    )
+                    logger.info(f"本批次新增 {len(nav_inserts)} 条净值记录")
+                except Exception as e:
+                    logger.error(f"插入 fund_nav 时出错: {e}", exc_info=True)
+                    raise
 
-        conn.commit()
+            conn.commit()  # 每批提交一次
+
         conn.close()
-        print(f"净值同步完成，新增 {len(nav_inserts)} 条，跳过 {len(existing_nav)-len(nav_inserts)} 条（已存在）")
+        logger.info("净值同步全部完成")
     except Exception as e:
-        print(f"AKShare补充数据失败: {e}")
-        import traceback
-        traceback.print_exc()
-
+        # 记录完整的堆栈信息
+        logger.error(f"AKShare补充数据失败: {type(e).__name__}: {e}")
+        logger.error(traceback.format_exc())
+        # 可选：将异常信息写入一个日志表，但为了简化，这里只打印
+        raise  # 让上层捕获（但上层没有处理，所以最终会出现在日志中）
 
 
 def fetch_estimated_nav_from_tiantian(fund_code: str, retry: int = 2) -> Optional[Dict[str, Any]]:
