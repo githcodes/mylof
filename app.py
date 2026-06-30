@@ -1607,7 +1607,7 @@ def backfill_shares_from_snapshot():
 
 
 def supplement_fund_details():
-    """使用 AKShare 补充基金的净值、申购状态等信息，增加线程池超时控制和详细日志"""
+    """使用 AKShare 补充基金的净值、申购状态等，增加更长超时和重试机制"""
     import logging
     import time
     import traceback
@@ -1616,29 +1616,51 @@ def supplement_fund_details():
     logger = logging.getLogger(__name__)
     logger.info("开始补充净值/申购状态...")
 
-    try:
-        # ---------- 第一步：使用线程池获取 AKShare 数据（带超时） ----------
-        logger.info("开始调用 ak.fund_purchase_em()...")
-        start_time = time.time()
+    # 最大重试次数（包含首次调用）
+    max_attempts = 2
+    for attempt in range(1, max_attempts + 1):
+        try:
+            logger.info(f"第 {attempt} 次尝试调用 ak.fund_purchase_em()...")
+            start_time = time.time()
 
-        # 创建一个线程执行 AKShare 调用
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(ak.fund_purchase_em)
-            try:
-                # 设置 30 秒超时
-                purchase_df = future.result(timeout=30)
-            except TimeoutError:
-                logger.error("ak.fund_purchase_em() 请求超时（30秒）")
-                # 注意：future 仍在运行，但我们不再等待，直接返回
-                # 由于无法取消线程，此处放弃结果
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(ak.fund_purchase_em)
+                try:
+                    # 设置 90 秒超时
+                    purchase_df = future.result(timeout=90)
+                except TimeoutError:
+                    logger.error(f"第 {attempt} 次请求超时（90秒）")
+                    if attempt < max_attempts:
+                        logger.info("等待 5 秒后重试...")
+                        time.sleep(5)
+                        continue  # 重试
+                    else:
+                        logger.error("所有重试均超时，放弃")
+                        return
+                except Exception as e:
+                    logger.error(f"AKShare 调用异常: {e}", exc_info=True)
+                    if attempt < max_attempts:
+                        logger.info("等待 5 秒后重试...")
+                        time.sleep(5)
+                        continue
+                    else:
+                        raise
+
+            elapsed = time.time() - start_time
+            logger.info(f"ak.fund_purchase_em() 调用完成，耗时 {elapsed:.2f} 秒")
+            break  # 成功则跳出重试循环
+
+        except Exception as e:
+            logger.error(f"第 {attempt} 次尝试失败: {e}", exc_info=True)
+            if attempt < max_attempts:
+                logger.info("等待 5 秒后重试...")
+                time.sleep(5)
+            else:
+                logger.error("所有重试失败，退出")
                 return
-            except Exception as e:
-                logger.error(f"ak.fund_purchase_em() 调用异常: {e}", exc_info=True)
-                raise
 
-        elapsed = time.time() - start_time
-        logger.info(f"ak.fund_purchase_em() 调用完成，耗时 {elapsed:.2f} 秒")
-
+    # 后续处理（在成功获取 purchase_df 后）
+    try:
         if purchase_df.empty:
             logger.warning("AKShare 获取申购状态数据为空")
             return
@@ -1647,14 +1669,13 @@ def supplement_fund_details():
         logger.info(f"数据列名: {purchase_df.columns.tolist()}")
         logger.info(f"示例数据（前两行）:\n{purchase_df.head(2).to_string()}")
 
-        # ---------- 第二步：获取数据库中的基金代码 ----------
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT fund_code FROM lof_funds")
         db_codes = {row[0] for row in cursor.fetchall()}
         logger.info(f"数据库中有 {len(db_codes)} 只基金")
 
-        # ---------- 第三步：过滤出数据库匹配的基金 ----------
+        # 提取基金代码
         try:
             if '基金代码' not in purchase_df.columns:
                 raise KeyError(f"列名 '基金代码' 不存在，实际列名: {purchase_df.columns.tolist()}")
@@ -1670,12 +1691,10 @@ def supplement_fund_details():
             conn.close()
             return
 
-        # ---------- 第四步：准备更新数据 ----------
-        # 获取已存在的净值记录，用于跳过重复插入 fund_nav
+        # 获取已存在的净值记录
         cursor.execute("SELECT fund_code, nav_date FROM fund_nav")
         existing_nav = {(row[0], row[1]) for row in cursor.fetchall()}
 
-        # 分批处理，每批 300 条
         batch_size = 300
         total = len(df_filtered)
         total_updated_funds = 0
@@ -1685,8 +1704,8 @@ def supplement_fund_details():
             batch = df_filtered.iloc[start:start + batch_size]
             logger.info(f"处理批次 {start // batch_size + 1}/{(total - 1) // batch_size + 1}，本批 {len(batch)} 条")
 
-            fund_updates = []  # 用于更新 lof_funds
-            nav_inserts = []   # 用于插入 fund_nav
+            fund_updates = []
+            nav_inserts = []
 
             for _, row in batch.iterrows():
                 raw_code = row.get('基金代码', '')
@@ -1699,7 +1718,6 @@ def supplement_fund_details():
                 if code not in db_codes:
                     continue
 
-                # 净值
                 nav = row.get('最新净值/万份收益')
                 if nav is not None and nav != '-':
                     try:
@@ -1712,14 +1730,13 @@ def supplement_fund_details():
                 if nav is None:
                     continue
 
-                # 净值日期
                 nav_date = row.get('最新净值/万份收益-报告时间')
                 if nav_date and isinstance(nav_date, str):
                     nav_date = nav_date.strip()
                     if re.match(r'\d{2}-\d{2}', nav_date):
                         current_year = datetime.now().strftime('%Y')
                         nav_date = f"{current_year}-{nav_date}"
-                # 申购状态、赎回状态、日限购
+
                 purchase_status = row.get('申购状态')
                 redemption_status = row.get('赎回状态')
                 daily_limit = row.get('日累计限定金额')
@@ -1733,14 +1750,12 @@ def supplement_fund_details():
 
                 fund_updates.append((nav, nav_date, purchase_status, redemption_status, daily_limit, code))
 
-                # 同步到 fund_nav（去重）
                 if nav_date and nav is not None:
                     key = (code, nav_date)
                     if key not in existing_nav:
                         nav_inserts.append((code, nav_date, nav))
                         existing_nav.add(key)
 
-            # 执行本批次的数据库操作
             if fund_updates:
                 try:
                     cursor.executemany('''
@@ -1769,17 +1784,17 @@ def supplement_fund_details():
                     raise
 
             conn.commit()
-            logger.info(f"批次提交完成")
 
         conn.close()
         logger.info(f"净值同步全部完成，共更新 {total_updated_funds} 只基金，新增 {total_inserted_nav} 条净值记录")
 
     except Exception as e:
-        logger.error(f"AKShare补充数据失败: {type(e).__name__}: {e}")
+        logger.error(f"处理数据时发生异常: {type(e).__name__}: {e}")
         logger.error(traceback.format_exc())
-        raise  # 让上层捕获并记录
+        raise
 
     logger.info("supplement_fund_details 执行完毕")
+
 
 
 def fetch_estimated_nav_from_tiantian(fund_code: str, retry: int = 2) -> Optional[Dict[str, Any]]:
