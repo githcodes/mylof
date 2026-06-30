@@ -4611,7 +4611,7 @@ scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour=22, 
 scheduler.add_job(
     func=do_update_all_latest,
     trigger="cron",
-    hour=21,
+    hour=22,
     minute=30,
     id='daily_update_all_latest'
 )
