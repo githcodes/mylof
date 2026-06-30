@@ -1607,36 +1607,34 @@ def backfill_shares_from_snapshot():
 
 
 def supplement_fund_details():
-    """使用 AKShare 补充基金的净值、申购状态等信息，增加超时控制、分批处理和详细日志"""
+    """使用 AKShare 补充基金的净值、申购状态等信息，增加线程池超时控制和详细日志"""
     import logging
     import time
-    import signal
     import traceback
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
     logger = logging.getLogger(__name__)
     logger.info("开始补充净值/申购状态...")
 
-    # -------------------- 超时控制 --------------------
-    def timeout_handler(signum, frame):
-        raise TimeoutError("AKShare fund_purchase_em() 请求超时（30秒）")
-
-    # 仅对 Linux/Unix 有效（Render 环境是 Linux）
     try:
-        signal.signal(signal.SIGALRM, timeout_handler)
-    except AttributeError:
-        logger.warning("当前环境不支持 SIGALRM，跳过超时控制")
-
-    try:
-        # ---------- 第一步：获取 AKShare 数据 ----------
+        # ---------- 第一步：使用线程池获取 AKShare 数据（带超时） ----------
         logger.info("开始调用 ak.fund_purchase_em()...")
         start_time = time.time()
 
-        # 设置 30 秒超时（仅 Unix）
-        try:
-            signal.alarm(30)
-            purchase_df = ak.fund_purchase_em()
-        finally:
-            signal.alarm(0)  # 取消超时
+        # 创建一个线程执行 AKShare 调用
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(ak.fund_purchase_em)
+            try:
+                # 设置 30 秒超时
+                purchase_df = future.result(timeout=30)
+            except TimeoutError:
+                logger.error("ak.fund_purchase_em() 请求超时（30秒）")
+                # 注意：future 仍在运行，但我们不再等待，直接返回
+                # 由于无法取消线程，此处放弃结果
+                return
+            except Exception as e:
+                logger.error(f"ak.fund_purchase_em() 调用异常: {e}", exc_info=True)
+                raise
 
         elapsed = time.time() - start_time
         logger.info(f"ak.fund_purchase_em() 调用完成，耗时 {elapsed:.2f} 秒")
@@ -1647,7 +1645,6 @@ def supplement_fund_details():
 
         logger.info(f"AKShare 返回 {len(purchase_df)} 条记录")
         logger.info(f"数据列名: {purchase_df.columns.tolist()}")
-        # 打印前两条示例数据（可能较长，但有助于定位字段）
         logger.info(f"示例数据（前两行）:\n{purchase_df.head(2).to_string()}")
 
         # ---------- 第二步：获取数据库中的基金代码 ----------
@@ -1678,7 +1675,7 @@ def supplement_fund_details():
         cursor.execute("SELECT fund_code, nav_date FROM fund_nav")
         existing_nav = {(row[0], row[1]) for row in cursor.fetchall()}
 
-        # 分批处理，每批 300 条，避免内存占用和事务过大
+        # 分批处理，每批 300 条
         batch_size = 300
         total = len(df_filtered)
         total_updated_funds = 0
@@ -1713,13 +1710,13 @@ def supplement_fund_details():
                     nav = None
 
                 if nav is None:
-                    continue  # 没有净值则跳过
+                    continue
 
                 # 净值日期
                 nav_date = row.get('最新净值/万份收益-报告时间')
                 if nav_date and isinstance(nav_date, str):
                     nav_date = nav_date.strip()
-                    if re.match(r'\d{2}-\d{2}', nav_date):   # 如 '06-24'
+                    if re.match(r'\d{2}-\d{2}', nav_date):
                         current_year = datetime.now().strftime('%Y')
                         nav_date = f"{current_year}-{nav_date}"
                 # 申购状态、赎回状态、日限购
@@ -1734,15 +1731,14 @@ def supplement_fund_details():
                 else:
                     daily_limit = None
 
-                # 收集更新 lof_funds
                 fund_updates.append((nav, nav_date, purchase_status, redemption_status, daily_limit, code))
 
-                # 收集插入 fund_nav（去重）
+                # 同步到 fund_nav（去重）
                 if nav_date and nav is not None:
                     key = (code, nav_date)
                     if key not in existing_nav:
                         nav_inserts.append((code, nav_date, nav))
-                        existing_nav.add(key)  # 避免重复
+                        existing_nav.add(key)
 
             # 执行本批次的数据库操作
             if fund_updates:
@@ -1772,25 +1768,20 @@ def supplement_fund_details():
                     conn.rollback()
                     raise
 
-            # 每批提交一次
             conn.commit()
             logger.info(f"批次提交完成")
 
         conn.close()
         logger.info(f"净值同步全部完成，共更新 {total_updated_funds} 只基金，新增 {total_inserted_nav} 条净值记录")
 
-    except TimeoutError as e:
-        logger.error(f"AKShare 请求超时: {e}")
-        # 可考虑重试或记录失败
     except Exception as e:
         logger.error(f"AKShare补充数据失败: {type(e).__name__}: {e}")
         logger.error(traceback.format_exc())
-        raise  # 让上层捕获，以便记录到日志
+        raise  # 让上层捕获并记录
 
     logger.info("supplement_fund_details 执行完毕")
 
 
-    
 def fetch_estimated_nav_from_tiantian(fund_code: str, retry: int = 2) -> Optional[Dict[str, Any]]:
     """
     从天天基金接口获取单个基金的实时估算净值（支持重试）
@@ -4544,8 +4535,8 @@ def api_missing_funds_list():
 scheduler = BackgroundScheduler()
 # 东方财富实时行情：每30分钟
 scheduler.add_job(func=fetch_realtime_data, trigger="interval", minutes=20, id='eastmoney')
-# AKShare 净值补充：每天凌晨2点
-scheduler.add_job(func=supplement_fund_details, trigger="cron", hour=2, minute=0, id='akshare')
+# AKShare 净值补充：每天23点
+scheduler.add_job(func=supplement_fund_details, trigger="cron", hour=23, minute=0, id='akshare')
 # 溢价率计算：每31分钟
 scheduler.add_job(func=update_premium_rate, trigger="interval", minutes=31, id='premium')
 # 估算净值：每32分钟
