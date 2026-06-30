@@ -1607,10 +1607,7 @@ def backfill_shares_from_snapshot():
 
 
 def supplement_fund_details():
-    """
-    使用 AKShare 补充基金的净值、申购状态、赎回状态、日限购金额等信息，
-    同时将净值数据同步到 fund_nav 表（批量优化版）。
-    """
+    """使用 AKShare 补充基金的净值、申购状态、赎回状态、日限购金额等信息，同时将净值数据同步到 fund_nav 表（批量优化版）。"""
     print(f"{datetime.now()}: [AKShare] 开始补充净值/申购状态...")
     try:
         purchase_df = ak.fund_purchase_em()
@@ -1618,16 +1615,27 @@ def supplement_fund_details():
             print("AKShare 获取申购状态数据为空")
             return
         print(f"AKShare 返回 {len(purchase_df)} 条记录")
+        print(f"AKShare 数据列名: {purchase_df.columns.tolist()}")  # 调试
+        # 打印前几行示例
+        print(purchase_df.head(2).to_string())
 
         conn = get_db()
         cursor = conn.cursor()
         # 获取数据库中所有基金代码
         cursor.execute("SELECT fund_code FROM lof_funds")
         db_codes = {row[0] for row in cursor.fetchall()}
-        print(f"数据库中有 {len(db_codes)} 只基金")
+        print(f"数据库中有 {len(db_codes)} 只基金，示例: {list(db_codes)[:5]}")
 
-        # 过滤出目标基金的数据
-        df_filtered = purchase_df[purchase_df['基金代码'].str.extract(r'(\d{6})')[0].isin(db_codes)]
+        # 提取基金代码（6位数字）
+        try:
+            extracted = purchase_df['基金代码'].str.extract(r'(\d{6})')[0]
+            print(f"提取后的基金代码示例: {extracted.head(3).tolist()}")
+            df_filtered = purchase_df[extracted.isin(db_codes)]
+        except Exception as e:
+            print(f"提取基金代码时出错: {e}")
+            raise
+
+        print(f"过滤后匹配到 {len(df_filtered)} 条记录")
         if df_filtered.empty:
             print("没有需要更新的基金")
             conn.close()
@@ -1714,6 +1722,9 @@ def supplement_fund_details():
         print(f"净值同步完成，新增 {len(nav_inserts)} 条，跳过 {len(existing_nav)-len(nav_inserts)} 条（已存在）")
     except Exception as e:
         print(f"AKShare补充数据失败: {e}")
+        import traceback
+        traceback.print_exc()
+
 
 
 def fetch_estimated_nav_from_tiantian(fund_code: str, retry: int = 2) -> Optional[Dict[str, Any]]:
