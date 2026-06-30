@@ -4110,8 +4110,7 @@ def refresh_nav():
         try:
             supplement_fund_details()
             update_premium_rate()
-            update_estimated_nav()
-            update_estimated_premium_rate()
+            
             print("✅ 净值刷新任务完成")
         except Exception as e:
             print(f"❌ 净值刷新任务失败: {e}")
