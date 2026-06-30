@@ -4580,12 +4580,12 @@ scheduler.add_job(func=update_estimated_premium_rate, trigger="interval", minute
 scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour='9-15', minute='*/30', id='missing_funds_timer')
 # 每晚 22:00 运行一次缺失基金处理
 scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour=22, minute=0, id='missing_funds_night')
-# 每天凌晨 1:00 执行全量最新数据更新
+# 每天凌晨21:30 执行全量最新数据更新
 scheduler.add_job(
     func=do_update_all_latest,
     trigger="cron",
-    hour=1,
-    minute=0,
+    hour=21,
+    minute=30,
     id='daily_update_all_latest'
 )
 print("已添加定时任务：每天凌晨 1:00 更新所有基金最新数据")
