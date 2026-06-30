@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的自选 - LOF看板</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 1600px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; }
+        h1 { text-align: center; color: #2c3e50; margin-bottom: 20px; }
+        .toolbar { margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .refresh-btn { background: #3498db; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+        .refresh-btn:hover { background: #2980b9; }
+        .back-link { background: #5a6e7c; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; text-decoration: none; display: inline-block; }
+        .back-link:hover { background: #2c3e50; }
+        .update-time { font-size: 12px; color: #666; }
+        .table-wrapper { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 1200px; }
+        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #ddd; white-space: nowrap; }
+        th { background: #2c3e50; color: white; position: sticky; top: 0; cursor: pointer; user-select: none; }
+        th:hover { background: #1e2b38; }
+        th .sort-indicator { margin-left: 5px; font-size: 12px; display: inline-block; }
+        tr:hover { background: #f9f9f9; }
+        .positive { color: #e74c3c; }
+        .negative { color: #27ae60; }
+        .fund-link { color: #3498db; text-decoration: none; }
+        .fund-link:hover { text-decoration: underline; }
+        .status-not-suspended { background-color: #fff3cd; }
+        .no-favorites { text-align: center; padding: 40px; font-size: 16px; color: #666; }
+        .star-col { width: 40px; text-align: center; }
+        .star-btn { background: none; border: none; font-size: 16px; cursor: pointer; color: #f1c40f; }
+        /* 重点基金样式 */
+        .important-fund {
+            color: #e74c3c !important;
+            font-weight: bold !important;
+        }
+        .important-fund a {
+            color: #e74c3c !important;
+            font-weight: bold !important;
+            text-decoration: none;
+        }
+        .important-fund a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>⭐ 我的自选基金</h1>
+    <div class="toolbar">
+        <div>
+            <a href="/" class="back-link">← 返回首页</a>
+            <button class="refresh-btn" onclick="loadFavorites()">🔄 刷新自选</button>
+            <button class="refresh-btn" style="background:#e67e22;" onclick="toggleAllImportant()">⭐ 切换所有重要标记</button>
+        </div>
+        <span class="update-time" id="updateTime"></span>
+    </div>
+    <div class="table-wrapper">
+        <table id="favTable">
+            <thead>
+                <tr>
+                    <th class="star-col">⭐</th>
+                    <th data-sort="fund_code">基金代码 <span class="sort-indicator"></span></th>
+                    <th data-sort="fund_name">基金名称 <span class="sort-indicator"></span></th>
+                    <th data-sort="current_price">最新交易价 <span class="sort-indicator"></span></th>
+                    <th data-sort="change_percent">涨跌幅(%) <span class="sort-indicator"></span></th>
+                    <th data-sort="nav">最新净值 <span class="sort-indicator"></span></th>
+                    <th data-sort="nav_date">净值日期 <span class="sort-indicator"></span></th>
+                    <th data-sort="estimated_nav">估算净值 <span class="sort-indicator"></span></th>
+                    <th data-sort="premium_rate">溢价率(%) <span class="sort-indicator"></span></th>
+                    <th data-sort="estimated_premium_rate">估算溢价率(%) <span class="sort-indicator"></span></th>
+                    <th data-sort="daily_purchase_limit">日申购限额 <span class="sort-indicator"></span></th>
+                  <!--  <th data-sort="purchase_status">申购状态 <span class="sort-indicator"></span></th>-->
+                    <th data-sort="shares_add">份额新增<br>(万份)</br> <span class="sort-indicator"></span></th>
+                    <th data-sort="total_market_value">总市值 <span class="sort-indicator"></span></th>
+                    <th data-sort="volume_hands">成交量(手) <span class="sort-indicator"></span></th>
+                    <th data-sort="volume_amount">成交额 <span class="sort-indicator"></span></th>
+                    <th>详情</th>
+                </tr>
+            </thead>
+            <tbody id="favTableBody">
+                <tr><td colspan="16" style="text-align:center;">加载中...<\/td><\/tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    let favoriteFunds = new Set();
+    const STORAGE_KEY = 'lof_favorites';
+    const IMPORTANT_STORAGE_KEY = 'lof_important_funds';  // 存储重点基金代码
+    let importantFunds = new Set();      // 重点关注的基金代码集合
+    let currentFavList = [];             // 存储当前自选基金列表（排序后的）
+    let currentSort = { field: 'fund_code', order: 'asc' };   // 当前排序字段和顺序
+
+    // ---------- 重点基金管理 ----------
+    function loadImportantFunds() {
+        const stored = localStorage.getItem(IMPORTANT_STORAGE_KEY);
+        if (stored) {
+            try {
+                const arr = JSON.parse(stored);
+                importantFunds = new Set(arr);
+            } catch(e) {}
+        }
+    }
+    function saveImportantFunds() {
+        const arr = Array.from(importantFunds);
+        localStorage.setItem(IMPORTANT_STORAGE_KEY, JSON.stringify(arr));
+    }
+    function isImportant(fundCode) {
+        return importantFunds.has(fundCode);
+    }
+    function toggleImportant(fundCode) {
+        if (importantFunds.has(fundCode)) {
+            importantFunds.delete(fundCode);
+            showToast(`已取消重点标记 ${fundCode}`);
+        } else {
+            importantFunds.add(fundCode);
+            showToast(`已标记为重点基金 ${fundCode}`);
+        }
+        saveImportantFunds();
+        renderTable(); // 刷新显示
+    }
+    function toggleAllImportant() {
+        // 将所有当前自选基金全部标记为重点（或取消全部？这里实现切换：如果有任意基金未重点，则全部标记为重点；如果全部已是重点，则全部取消）
+        const allMarked = currentFavList.every(f => importantFunds.has(f.fund_code));
+        if (allMarked) {
+            importantFunds.clear();
+            showToast("已取消所有重点标记");
+        } else {
+            currentFavList.forEach(f => importantFunds.add(f.fund_code));
+            showToast("已将所有自选基金标记为重点");
+        }
+        saveImportantFunds();
+        renderTable();
+    }
+
+    // ---------- 自选管理 ----------
+    function loadFavoritesFromLocal() {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+            try {
+                const arr = JSON.parse(stored);
+                favoriteFunds = new Set(arr);
+            } catch(e) {}
+        }
+    }
+    function saveFavorites() {
+        const arr = Array.from(favoriteFunds);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+    }
+    function toggleFavorite(fundCode) {
+        if (favoriteFunds.has(fundCode)) {
+            favoriteFunds.delete(fundCode);
+        } else {
+            favoriteFunds.add(fundCode);
+        }
+        saveFavorites();
+        loadFavorites(); // 重新加载自选列表
+    }
+
+    // ---------- 辅助函数 ----------
+    function safeNumber(val) {
+        if (val === null || val === undefined || val === '-') return null;
+        let num = parseFloat(val);
+        return isNaN(num) ? null : num;
+    }
+    function formatNumber(num, digits) {
+        if (num === null) return '-';
+        return num.toFixed(digits);
+    }
+    function formatPercent(num, digits) {
+        if (num === null) return '-';
+        return num.toFixed(digits) + '%';
+    }
+    function showToast(msg, isError = false) {
+        // 简单实现 toast，如果页面中没有toast元素，可以创建临时弹窗
+        let toast = document.getElementById('toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'toast';
+            toast.style.position = 'fixed';
+            toast.style.bottom = '20px';
+            toast.style.right = '20px';
+            toast.style.backgroundColor = '#2c3e50';
+            toast.style.color = 'white';
+            toast.style.padding = '10px 20px';
+            toast.style.borderRadius = '8px';
+            toast.style.zIndex = '1000';
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s';
+            document.body.appendChild(toast);
+        }
+        toast.style.backgroundColor = isError ? '#c0392b' : '#2c3e50';
+        toast.textContent = msg;
+        toast.style.opacity = '1';
+        setTimeout(() => {
+            toast.style.opacity = '0';
+        }, 3000);
+    }
+
+    // ---------- 排序函数 ----------
+    function sortFavList(list, field, order) {
+        return [...list].sort((a, b) => {
+            let aVal, bVal;
+            switch (field) {
+                case 'fund_code':
+                case 'fund_name':
+                case 'nav_date':
+                case 'purchase_status':
+                    aVal = a[field] || '';
+                    bVal = b[field] || '';
+                    if (order === 'asc') return aVal.localeCompare(bVal, 'zh');
+                    else return bVal.localeCompare(aVal, 'zh');
+                case 'current_price':
+                    aVal = safeNumber(a.current_price) ?? -Infinity;
+                    bVal = safeNumber(b.current_price) ?? -Infinity;
+                    break;
+                case 'change_percent':
+                    aVal = safeNumber(a.change_percent) ?? -Infinity;
+                    bVal = safeNumber(b.change_percent) ?? -Infinity;
+                    break;
+                case 'nav':
+                    aVal = safeNumber(a.nav) ?? -Infinity;
+                    bVal = safeNumber(b.nav) ?? -Infinity;
+                    break;
+                case 'estimated_nav':
+                    aVal = safeNumber(a.estimated_nav) ?? -Infinity;
+                    bVal = safeNumber(b.estimated_nav) ?? -Infinity;
+                    break;
+                case 'premium_rate':
+                    aVal = safeNumber(a.premium_rate) ?? -Infinity;
+                    bVal = safeNumber(b.premium_rate) ?? -Infinity;
+                    break;
+                case 'estimated_premium_rate':
+                    aVal = safeNumber(a.estimated_premium_rate) ?? -Infinity;
+                    bVal = safeNumber(b.estimated_premium_rate) ?? -Infinity;
+                    break;
+                case 'daily_purchase_limit':
+                    aVal = safeNumber(a.daily_purchase_limit) ?? -Infinity;
+                    bVal = safeNumber(b.daily_purchase_limit) ?? -Infinity;
+                    break;
+                case 'shares_add':
+                    aVal = safeNumber(a.shares_add) ?? -Infinity;
+                    bVal = safeNumber(b.shares_add) ?? -Infinity;
+                    break;
+                case 'total_market_value':
+                    aVal = safeNumber(a.total_market_value) ?? -Infinity;
+                    bVal = safeNumber(b.total_market_value) ?? -Infinity;
+                    break;
+                case 'volume_hands':
+                    aVal = safeNumber(a.volume_hands) ?? -Infinity;
+                    bVal = safeNumber(b.volume_hands) ?? -Infinity;
+                    break;
+                case 'volume_amount':
+                    aVal = safeNumber(a.volume_amount) ?? -Infinity;
+                    bVal = safeNumber(b.volume_amount) ?? -Infinity;
+                    break;
+                default:
+                    aVal = a[field] ?? '';
+                    bVal = b[field] ?? '';
+            }
+            if (typeof aVal === 'number' && typeof bVal === 'number') {
+                if (order === 'asc') return aVal - bVal;
+                else return bVal - aVal;
+            } else {
+                const aStr = String(aVal);
+                const bStr = String(bVal);
+                if (order === 'asc') return aStr.localeCompare(bStr);
+                else return bStr.localeCompare(aStr);
+            }
+        });
+    }
+
+    function updateSortIndicators() {
+        document.querySelectorAll('#favTable th[data-sort]').forEach(th => {
+            const field = th.getAttribute('data-sort');
+            const indicator = th.querySelector('.sort-indicator');
+            if (field === currentSort.field) {
+                indicator.textContent = currentSort.order === 'asc' ? ' ▲' : ' ▼';
+            } else {
+                indicator.textContent = '';
+            }
+        });
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('favTableBody');
+        if (!currentFavList.length) {
+            tbody.innerHTML = `<tr><td colspan="16" class="no-favorites">暂无自选基金，请回到<a href="/">首页</a>点击⭐添加<\/td><\/tr>`;
+            document.getElementById('updateTime').innerHTML = '';
+            return;
+        }
+        let html = '';
+        for (let f of currentFavList) {
+            let price = safeNumber(f.current_price);
+            let change = safeNumber(f.change_percent);
+            let nav = safeNumber(f.nav);
+            let premium = safeNumber(f.premium_rate);
+            let estNav = safeNumber(f.estimated_nav);
+            let estPrem = safeNumber(f.estimated_premium_rate);
+            let volHands = safeNumber(f.volume_hands);
+            let changeClass = (change !== null && change >= 0) ? 'positive' : 'negative';
+            let premiumClass = (premium !== null && premium >= 0) ? 'positive' : 'negative';
+            let estPremClass = (estPrem !== null && estPrem >= 0) ? 'positive' : 'negative';
+            let statusBg = (f.purchase_status && f.purchase_status !== '暂停申购') ? 'status-not-suspended' : '';
+            const isFav = favoriteFunds.has(f.fund_code);
+            const isImp = isImportant(f.fund_code);
+            const codeClass = isImp ? 'important-fund' : '';
+            const nameClass = isImp ? 'important-fund' : '';
+
+             // 构建基金名称列（包含暂停状态）
+            let nameHtml = `<a href="/fund/${f.fund_code}" class="fund-link ${nameClass}" target="_blank">${f.fund_name || '-'}</a>`;
+            if (f.purchase_status && f.purchase_status.includes('暂停')) {
+                nameHtml += `<span style="background-color: #ffeb3b; padding: 0 4px; border-radius: 2px; font-weight:bold;">暂停</span>`;
+            }
+            html += `<tr>
+                <td class="star-col"><button class="star-btn" onclick="toggleFavorite('${f.fund_code}')">${isFav ? '★' : '☆'}</button> <button class="star-btn" style="color:#e67e22; font-size:14px;" onclick="toggleImportant('${f.fund_code}')">${isImp ? '❤️' : '♡'}</button></td>
+                <td><a href="/fund/${f.fund_code}" class="fund-link ${codeClass}" target="_blank">${f.fund_code || '-'}</a></td>
+                 <td>${nameHtml}</td>
+                <td>${formatNumber(price, 3)}</td>
+                <td class="${changeClass}">${formatPercent(change, 2)}</td>
+                <td>${formatNumber(nav, 4)}</td>
+                <td>${f.nav_date || '-'}</td>
+                <td>${formatNumber(estNav, 4)}</td>
+                <td class="${premiumClass}">${formatPercent(premium, 2)}</td>
+                <td class="${estPremClass}">${formatPercent(estPrem, 2)}</td>
+                <td>${f.daily_limit_display}</td>
+               <!-- <td class="${statusBg}">${f.purchase_status || '-'}</td> -->
+               <td>${formatNumber(safeNumber(f.shares_add), 2)}</td>
+                <td>${f.total_mv_display}</td>
+                <td>${formatNumber(volHands, 0)}</td>
+                <td>${f.volume_amount_display}</td>
+                <td><a href="/fund/${f.fund_code}" class="fund-link" target="_blank">详情</a></td>
+            </table>`;
+        }
+        tbody.innerHTML = html;
+        if (currentFavList.length && currentFavList[0]?.updated_at) {
+            document.getElementById('updateTime').innerHTML = `数据更新时间: ${new Date(currentFavList[0].updated_at).toLocaleString()}`;
+        }
+    }
+
+    async function loadFavorites() {
+        const tbody = document.getElementById('favTableBody');
+        tbody.innerHTML = '<td><td colspan="16" style="text-align:center;">加载中...<\/td><\/tr>';
+        try {
+            const res = await fetch('/api/lof/list');
+            if (!res.ok) throw new Error('获取数据失败');
+            const allFunds = await res.json();
+            const favFunds = allFunds.filter(f => favoriteFunds.has(f.fund_code));
+            if (favFunds.length === 0) {
+                currentFavList = [];
+                renderTable();
+                return;
+            }
+            currentFavList = sortFavList(favFunds, currentSort.field, currentSort.order);
+            renderTable();
+            updateSortIndicators();
+        } catch (err) {
+            console.error('加载失败:', err);
+            tbody.innerHTML = '<tr><td colspan="16">加载失败，请检查网络<\/td><\/tr>';
+        }
+    }
+
+    function setupSorting() {
+        const ths = document.querySelectorAll('#favTable th[data-sort]');
+        ths.forEach(th => {
+            th.addEventListener('click', () => {
+                const field = th.getAttribute('data-sort');
+                if (currentSort.field === field) {
+                    currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentSort.field = field;
+                    currentSort.order = 'asc';
+                }
+                if (currentFavList.length) {
+                    currentFavList = sortFavList(currentFavList, currentSort.field, currentSort.order);
+                    renderTable();
+                    updateSortIndicators();
+                }
+            });
+        });
+    }
+
+    window.onload = () => {
+        loadImportantFunds();
+        loadFavoritesFromLocal();
+        loadFavorites();
+        setupSorting();
+    };
+</script>
+</body>
+</html>

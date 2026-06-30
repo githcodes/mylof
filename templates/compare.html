@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>基金对比 - LOF看板</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; margin: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #2c3e50; color: white; }
+        .positive { color: #e74c3c; }
+        .negative { color: #27ae60; }
+        .back-link { display: inline-block; margin-bottom: 15px; color: #3498db; text-decoration: none; }
+        .chart-container { width: 100%; height: 400px; margin-top: 20px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <a href="/" class="back-link">← 返回列表</a>
+    <h1>📊 基金对比</h1>
+    <div id="compareTable">加载中...</div>
+    <div id="compareChart" class="chart-container"></div>
+</div>
+<script>
+    const params = new URLSearchParams(window.location.search);
+    const codes = params.get('codes')?.split(',') || [];
+    if (codes.length < 2) {
+        document.getElementById('compareTable').innerHTML = '<p>请至少选择两只基金</p>';
+    } else {
+        fetch(`/api/lof/compare?codes=${codes.join(',')}`)
+            .then(res => res.json())
+            .then(data => {
+                if (!data.length) { document.getElementById('compareTable').innerHTML = '<p>暂无对比数据</p>'; return; }
+                let html = '<table><thead><tr><th>基金代码</th><th>基金名称</th><th>最新价</th><th>涨跌幅(%)</th><th>最新净值</th><th>溢价率(%)</th><th>估算净值</th><th>估算溢价率(%)</th></tr></thead><tbody>';
+                data.forEach(f => {
+                    let change = parseFloat(f.change_percent), premium = parseFloat(f.premium_rate), estPrem = parseFloat(f.estimated_premium_rate);
+                    let changeCls = !isNaN(change) && change>=0 ? 'positive' : 'negative';
+                    let premCls = !isNaN(premium) && premium>=0 ? 'positive' : 'negative';
+                    let estPremCls = !isNaN(estPrem) && estPrem>=0 ? 'positive' : 'negative';
+                    html += `<tr>
+                        <td>${f.fund_code}</td><td>${f.fund_name}</td>
+                        <td>${f.current_price?.toFixed(3)??'-'}</td>
+                        <td class="${changeCls}">${f.change_percent?.toFixed(2)+'%'??'-'}</td>
+                        <td>${f.nav?.toFixed(4)??'-'}</td>
+                        <td class="${premCls}">${f.premium_rate?.toFixed(2)+'%'??'-'}</td>
+                        <td>${f.estimated_nav?.toFixed(4)??'-'}</td>
+                        <td class="${estPremCls}">${f.estimated_premium_rate?.toFixed(2)+'%'??'-'}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                document.getElementById('compareTable').innerHTML = html;
+                const chart = echarts.init(document.getElementById('compareChart'));
+                chart.setOption({
+                    title: { text: '最新价对比', left: 'center' },
+                    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                    xAxis: { type: 'category', data: data.map(f => f.fund_name) },
+                    yAxis: { type: 'value', name: '价格(元)' },
+                    series: [{ type: 'bar', data: data.map(f => f.current_price), itemStyle: { color: '#3498db' } }]
+                });
+                window.addEventListener('resize', () => chart.resize());
+            })
+            .catch(err => { console.error(err); document.getElementById('compareTable').innerHTML = '<p>加载失败</p>'; });
+    }
+</script>
+</body>
+</html>

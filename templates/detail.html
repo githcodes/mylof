@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基金详情 - LOF看板</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #E8F5E8; 
+            margin: 0; 
+            padding: 0;
+            font-size: 18px; 
+        }
+        .container { 
+            max-width: 100%;
+            margin: 0; 
+            padding: 0;
+        }
+        .card { 
+            background: white; 
+            border-radius: 0;
+            padding: 24px 20px; 
+            margin-bottom: 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
+            border-bottom: 1px solid #e0e0e0;
+        }
+        h2 { margin-top: 0; color: #2c3e50; border-left: 4px solid #3498db; padding-left: 12px; font-size: 26px; }
+        .back-link { display: inline-block; margin-bottom: 18px; color: #3498db; text-decoration: none; font-size: 18px; }
+        .back-link:hover { text-decoration: underline; }
+        .info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 14px; background: #F4F9F4; padding: 18px; border-radius: 8px; }
+        .info-item { border-bottom: 1px solid #ddd; padding: 10px 0; font-size: 17px; }
+        .positive { color: #e74c3c; }
+        .negative { color: #27ae60; }
+        table { width: 100%; border-collapse: collapse; font-size: 16px; table-layout: auto; }
+        th, td { padding: 12px 14px; text-align: center; border-right: 1px solid #e0e0e0; border-bottom: 1px solid #e0e0e0; white-space: nowrap; }
+        th:last-child, td:last-child { border-right: none; }
+        th { background: #2c3e50; color: white; position: sticky; top: 0; z-index: 10; font-size: 16px; }
+        /* 表头颜色 */
+        .red-th { color: #e74c3c !important; }
+        .blue-th { color: #3498db !important; }
+        .purple-th { color: #9b59b6 !important; }
+        /* 整列数据颜色 */
+        .blue-number { color: #3498db; font-weight: 500; }
+        .purple-number { color: #9b59b6; font-weight: 500; }
+        .red-number { color: #e74c3c !important; font-weight: 500; }
+        /* 高亮：加粗红色（用于基差、误差、动差，绝对值 > 1%） */
+        .bold-red { color: #e74c3c !important; font-weight: bold !important; }
+        /* 溢价率列数据加粗 */
+        .premium-bold {
+            font-weight: bold !important;
+        }
+        
+        tr:hover { background: #F5F9F5; }
+        .total-row { background-color: #f0f0f0; font-weight: bold; }
+        .total-row td { border-top: 2px solid #ddd; }
+        .history-table-wrapper { overflow-x: auto; }
+        .fixed-col { position: sticky; left: 0; background-color: white; z-index: 5; border-right: 1px solid #e0e0e0; }
+        th.fixed-col { background-color: #2c3e50; z-index: 15; }
+        .number { text-align: center !important; }
+        .asset-summary { display: flex; flex-wrap: wrap; gap: 28px; background: #F4F9F4; padding: 18px 24px; border-radius: 8px; margin-top: 12px; font-size: 17px; }
+        .asset-summary div { font-size: 17px; }
+        .row-container { display: flex; gap: 24px; margin-bottom: 24px; }
+        .row-container > div { flex: 1; min-width: 0; }
+        @media (max-width: 800px) { .row-container { flex-direction: column; } }
+        .import-btn { background: #e67e22; border: none; padding: 10px 22px; border-radius: 6px; cursor: pointer; color: white; font-size: 16px; }
+        .import-btn:hover { background: #d35400; }
+        #feeBody ul { padding-left: 24px; font-size: 16px; }
+        #feeBody li { margin: 8px 0; }
+        #feeBody div strong { font-size: 17px; }
+        @media (max-width: 1200px) { .history-table-wrapper { overflow-x: auto; } table { min-width: 1200px; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <a href="/" class="back-link">← 返回列表</a>
+        <div id="detailContent">加载中...</div>
+    </div>
+    <div id="assetAllocationContent" class="card" style="display: none;">
+        <h2>📊 资产配置</h2>
+        <div class="asset-summary">
+            <div><strong>报告期：</strong><span id="reportDate">--</span></div>
+            <div><strong>净资产规模：</strong><span id="netAssets">--</span>亿元</div>
+            <div><strong>股票占净比：</strong><span id="stockRatio">--</span>%</div>
+            <div><strong>债券占净比：</strong><span id="bondRatio">--</span>%</div>
+            <div><strong>现金占净比：</strong><span id="cashRatio">--</span>%</div>
+        </div>
+    </div>
+    <div class="row-container">
+        <div id="holdingsContent" class="card" style="flex:3; min-width:0;">
+            <h2>📊 最新持仓</h2>
+            <div style="overflow-x: auto;">
+                <table id="holdingsTable"><thead><tr><th>序号</th><th>股票代码</th><th>股票名称</th><th>现价</th><th>涨跌幅(%)</th><th>占净值比例(%)</th><th>净值涨跌占比(%)</th><th>持股数(万股)</th><tr></thead>
+                <tbody id="holdingsTbody"><tr><td colspan="8">加载中...<\/td><\/tr></tbody>
+            </table>
+            </div>
+        </div>
+        <div id="feeContent" class="card" style="flex:1; min-width:0;"><h2>💰 申赎费率</h2><div id="feeBody">加载中...</div></div>
+    </div>
+    <div id="historyContent" class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;"><h2>📈 历史数据</h2><button id="refreshHistoryBtn" class="import-btn">📥 导入历史数据</button></div>
+        <div class="history-table-wrapper">
+            <table id="historyTable">
+                <thead>
+                    <tr>
+                        <th class="fixed-col">基金代码</th>
+                        <th>日期</th>
+                        <th>收盘价</th>
+                        <th>最低价</th>
+                        <th>最低/<br>净值(%)</th>
+                        <th>净值日期</th>
+                        <th>净值</th>
+                         <th>净值涨<br>跌幅(%)</th>
+                        <!-- 基估组：顺序 基估(K) | 基差(K) | 基溢(K) -->
+                        <th class="blue-th">基估(K)</th>
+                        <th class="blue-th">基差(K)</th>
+                        <th class="blue-th">基溢(K)</th>
+                        <!-- 动估组：紫色表头 -->
+                        <th class="purple-th">动估(K)</th>
+                        <th class="purple-th">动差(K)</th>
+                        <th class="purple-th">动溢(K)</th>
+                        <!-- 估值组：红色表头 -->
+                        <th class="red-th">估值(K)</th>
+                        <th class="red-th">误差(K)</th>
+                        <th class="red-th">溢价率(K)</th>
+                        <th>溢价率</th>
+                        <th>成交额<br>(万元)</th>
+                        <th>场内份额<br>(万份)</th>
+                        <th>场内新增<br>(万份)</th>
+                        <th>份额涨幅</th>
+                        <th id="lastColHeader">指数涨幅</th>
+                    </tr>
+                </thead>
+                <tbody id="historyTbody">
+                    <tr><td colspan="19" style="text-align:center;">加载中...<\/td><\/tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<script>
+    const fundCode = window.location.pathname.split('/').pop();
+    let fundType = null;
+    function safeNumber(v){ if(v===null||v===undefined||v==='-') return null; let n=parseFloat(v); return isNaN(n)?null:n; }
+    function formatNumber(n,d){ return n!==null?n.toFixed(d):'-'; }
+    function formatPercent(n,d){ return n!==null?n.toFixed(d)+'%':'-'; }
+    function getSignClass(n){ return n!==null && n>=0?'positive':'negative'; }
+    
+    /**
+     * 根据数值生成高亮内容（用于基差、误差、动差）
+     * @param {number|null} value 数值（百分比数值，如 1.2 表示 1.2%）
+     * @param {number} decimals 小数位数
+     * @returns {string} HTML字符串
+     * 规则：绝对值 > 1 时加粗红色，否则普通显示
+     */
+    function formatHighlightPercent(value, decimals=2) {
+        if (value === null) return '-';
+        const formatted = value.toFixed(decimals) + '%';
+        if (Math.abs(value) > 1) {
+            return `<span class="bold-red">${formatted}</span>`;
+        }
+        return formatted;
+    }
+    
+    async function loadDetail(){
+        try{
+            const res=await fetch(`/api/lof/detail/${fundCode}`);
+            const data=await res.json();
+            const info=data.info;
+            fundType = data.fund_type;
+            const lastColTh = document.getElementById('lastColHeader');
+            if(lastColTh) lastColTh.innerText = fundType==='被动指数型'?'指数涨幅':'重仓涨幅';
+            const price=safeNumber(info.current_price), change=safeNumber(info.change_percent);
+            const nav=safeNumber(info.nav), premium=safeNumber(info.premium_rate);
+            const estNav=safeNumber(info.estimated_nav), estPrem=safeNumber(info.estimated_premium_rate);
+            document.getElementById('detailContent').innerHTML=`<h2>${info.fund_name||fundCode} (${info.fund_code||'-'})</h2><div class="info-grid"><div class="info-item"><strong>最新价：</strong>${formatNumber(price,3)}</div><div class="info-item"><strong>涨跌幅：</strong><span class="${getSignClass(change)}">${formatPercent(change,2)}</span></div><div class="info-item"><strong>最新净值：</strong>${formatNumber(nav,4)}</div><div class="info-item"><strong>净值日期：</strong>${info.nav_date||'-'}</div><div class="info-item"><strong>溢价率：</strong><span class="${getSignClass(premium)}">${formatPercent(premium,2)}</span></div><div class="info-item"><strong>估算净值：</strong>${formatNumber(estNav,4)}</div><div class="info-item"><strong>估算溢价率：</strong><span class="${getSignClass(estPrem)}">${formatPercent(estPrem,2)}</span></div><div class="info-item"><strong>成交量(手)：</strong>${formatNumber(safeNumber(info.volume_hands),0)}</div><div class="info-item"><strong>成交额(万)：</strong>${formatNumber(safeNumber(info.volume_amount),2)}</div><div class="info-item"><strong>总市值(万)：</strong>${formatNumber(safeNumber(info.total_market_value),0)}</div><div class="info-item"><strong>申购状态：</strong>${info.purchase_status||'-'}</div><div class="info-item"><strong>赎回状态：</strong>${info.redemption_status||'-'}</div></div>`;
+        }catch(e){ console.error(e); document.getElementById('detailContent').innerHTML='<p style="color:red;">加载失败</p>'; }
+    }
+    async function loadAssetAllocation(){
+        try{
+            const res=await fetch(`/api/lof/detail/${fundCode}`);
+            const data=await res.json();
+            const asset=data.asset_allocation;
+            const card=document.getElementById('assetAllocationContent');
+            if(asset && (asset.stock_ratio!==null || asset.net_assets!==null)){
+                card.style.display='block';
+                document.getElementById('reportDate').innerText=asset.report_date||'-';
+                document.getElementById('netAssets').innerText=asset.net_assets!==null?asset.net_assets.toFixed(2):'-';
+                document.getElementById('stockRatio').innerText=asset.stock_ratio!==null?asset.stock_ratio.toFixed(2):'-';
+                document.getElementById('bondRatio').innerText=asset.bond_ratio!==null?asset.bond_ratio.toFixed(2):'-';
+                document.getElementById('cashRatio').innerText=asset.cash_ratio!==null?asset.cash_ratio.toFixed(2):'-';
+            }else card.style.display='none';
+        }catch(e){ console.error('资产配置加载失败:',e); }
+    }
+    async function loadHistory(){
+        const tbody=document.getElementById('historyTbody');
+        try{
+            const res=await fetch(`/api/lof/history/${fundCode}`);
+            const data=await res.json();
+            if(!data.length){ tbody.innerHTML='<tr><td colspan="19">暂无历史数据<\/td><\/tr>'; return; }
+            let html='';
+            // 倒序展示，最新在前
+            for(let i=data.length-1;i>=0;i--){
+                const h=data[i];
+                const navChangePct = safeNumber(h.nav_change_pct);
+                const navChangeClass = getSignClass(navChangePct);
+                // 提取各数值
+                const jiguVal = safeNumber(h.jigu);
+                const jiyiVal = safeNumber(h.jiyi);
+                const jichaVal = safeNumber(h.jicha);
+                const dongguVal = safeNumber(h.donggu);
+                const dongchaVal = safeNumber(h.dongcha);
+                const dongyiVal = safeNumber(h.dongyi);
+                const guzhiVal = safeNumber(h.guzhi);
+                const wuchaVal = safeNumber(h.wucha);
+                const premiumRateKVal = safeNumber(h.premium_rate_k);
+                const premiumRateVal = safeNumber(h.premium_rate);
+                const volumeVal = safeNumber(h.volume);
+                const sharesVal = safeNumber(h.shares);
+                const sharesAddVal = safeNumber(h.shares_add);
+                const sharesChangeVal = safeNumber(h.shares_change);
+                const indexChangeVal = safeNumber(h.index_change);
+                const closeVal = safeNumber(h.close);
+                const navVal = safeNumber(h.nav);
+                const lowVal = safeNumber(h.low);    // ✅ 最低价
+                const lowNavChange = safeNumber(h.low_nav_change);
+                
+                
+                // 三列应用条件高亮：基差(K)、动差(K)、误差(K) —— 绝对值 > 1 加粗红色
+                const jichaFormatted = formatHighlightPercent(jichaVal, 2);
+                const dongchaFormatted = formatHighlightPercent(dongchaVal, 2);
+                const wuchaFormatted = formatHighlightPercent(wuchaVal, 2);
+                
+                // 普通百分比（无需高亮）
+                const jiyiFormatted = jiyiVal !== null ? jiyiVal.toFixed(2)+'%' : '-';
+                const dongyiFormatted = dongyiVal !== null ? dongyiVal.toFixed(2)+'%' : '-';
+                const premiumRateKFormatted = premiumRateKVal !== null ? premiumRateKVal.toFixed(2)+'%' : '-';
+                
+                html+=`<tr>
+                    <td class="fixed-col" style="background:#fff;">${fundCode}</td>
+                    <td class="number">${h.date}</td>
+                    <td class="number">${closeVal!==null?closeVal.toFixed(3):'-'}</td>
+                    <td class="number">${lowVal!==null?lowVal.toFixed(3):'-'}</td>
+                    <td class="${getSignClass(lowNavChange)} number">${lowNavChange!==null?lowNavChange.toFixed(2)+'%':'-'}</td>
+                    <td class="number">${h.nav_date||'-'}<\/td>
+                    <td class="number">${navVal!==null?navVal.toFixed(4):'-'}<\/td>
+                    <td class="${navChangeClass} number premium-bold">${formatPercent(navChangePct,2)}</td>
+                    
+                    <!-- 基估(K) 整列蓝色 .blue-number -->
+                    <td class="number blue-number">${jiguVal!==null?jiguVal.toFixed(4):'-'}<\/td>
+                    <!-- 基差(K) 条件高亮红色加粗 -->
+                    <td class="number">${jichaFormatted}<\/td>
+                    <!-- 基溢(K) -->
+                    <td class="number" style="font-weight:bold;">${jiyiFormatted}<\/td>
+                    <!-- 动估(K) 整列紫色 .purple-number -->
+                    <td class="number purple-number">${dongguVal!==null?dongguVal.toFixed(4):'-'}<\/td>
+                    <!-- 动差(K) 条件高亮红色加粗 -->
+                    <td class="number">${dongchaFormatted}<\/td>
+                    <!-- 动溢(K) -->
+                    <td class="number" style="font-weight:bold;">${dongyiFormatted}<\/td>
+                    <!-- 估值(K) 整列红色 .red-number -->
+                    <td class="number red-number">${guzhiVal!==null?guzhiVal.toFixed(4):'-'}<\/td>
+                    <!-- 误差(K) 条件高亮红色加粗 -->
+                    <td class="number">${wuchaFormatted}<\/td>
+                    <!-- 溢价率(K) -->
+                    <td class="number"  style="font-weight:bold;">${premiumRateKFormatted}<\/td>
+                    <!-- 溢价率 带正负颜色并加粗 -->
+                    <td class="${getSignClass(premiumRateVal)} number premium-bold">${premiumRateVal!==null?premiumRateVal.toFixed(2)+'%':'-'}<\/td>
+                    <td class="number">${volumeVal!==null?volumeVal.toFixed(2):'-'}<\/td>
+                    <td class="number">${sharesVal!==null?sharesVal.toFixed(2):'-'}<\/td>
+                    <td class="number">${sharesAddVal!==null?sharesAddVal.toFixed(2):'-'}<\/td>
+                    <td class="number">${sharesChangeVal!==null?sharesChangeVal.toFixed(2)+'%':'-'}<\/td>
+                    <td class="number">${indexChangeVal!==null?indexChangeVal.toFixed(2)+'%':'-'}<\/td>
+                </tr>`;
+            }
+            tbody.innerHTML=html;
+        }catch(e){ console.error(e); tbody.innerHTML='</td><td colspan="19">加载失败<\/td><\/tr>'; }
+    }
+    async function loadHoldings(){
+        try{
+            const res=await fetch(`/api/lof/detail/${fundCode}`);
+            const data=await res.json();
+            const holdings=data.holdings;
+            const tbody=document.getElementById('holdingsTbody');
+            if(!holdings||!holdings.length){ tbody.innerHTML='<tr><td colspan="8">暂无持仓数据<\/td><\/tr>'; return; }
+            let html='', totalRatio=0, totalContribution=0;
+            holdings.forEach(h=>{
+                const ratio=safeNumber(h.nav_ratio), change=safeNumber(h.change_percent), price=safeNumber(h.current_price), shares=safeNumber(h.shares);
+                const contribution=(change!==null && ratio!==null)?(change*ratio/100):null;
+                if(ratio!==null) totalRatio+=ratio;
+                if(contribution!==null) totalContribution+=contribution;
+                html+=`<tr>
+                    <td>${h.holding_rank||'-'}<\/td>
+                    <td>${h.stock_code||'-'}<\/td>
+                    <td>${h.stock_name||'-'}<\/td>
+                    <td class="number">${price!==null?price.toFixed(2):'-'}<\/td>
+                    <td class="${getSignClass(change)} number">${change!==null?change.toFixed(2)+'%':'-'}<\/td>
+                    <td class="number">${ratio!==null?ratio.toFixed(2)+'%':'-'}<\/td>
+                    <td class="${getSignClass(contribution)} number">${contribution!==null?contribution.toFixed(3)+'%':'-'}<\/td>
+                    <td class="number">${shares!==null?shares.toFixed(2):'-'}<\/td>
+                </tr>`;
+            });
+            html+=`<tr class="total-row"><td colspan="5"><strong>合计<\/strong><\/td>
+                <td class="number"><strong>${totalRatio.toFixed(2)}%<\/strong><\/td>
+                <td class="number"><strong>${totalContribution.toFixed(3)}%<\/strong><\/td>
+                <td class="number">-<\/td><\/tr>`;
+            tbody.innerHTML=html;
+        }catch(e){ console.error(e); }
+    }
+    async function loadFees(){
+        try{
+            const res=await fetch(`/api/lof/detail/${fundCode}`);
+            const data=await res.json();
+            const rates=data.rates;
+            if(!rates){ document.getElementById('feeBody').innerHTML='<p>暂无费率数据</p>'; return; }
+            let html='';
+            if(rates.purchase_fee){
+                try{
+                    const purchase=JSON.parse(rates.purchase_fee);
+                    if(purchase && purchase.length>0){
+                        html+='<div><strong>申购费率</strong></div><ul>';
+                        purchase.forEach(item=>{ html+=`<li>${item.condition}：${item.rate!==null?item.rate+'%':'--'}</li>`; });
+                        html+='</ul>';
+                    }else html+='<div><strong>申购费率</strong></div><p>暂无数据</p>';
+                }catch(e){ html+='<div><strong>申购费率</strong></div><p>数据格式错误</p>'; }
+            }else html+='<div><strong>申购费率</strong></div><p>暂无数据</p>';
+            if(rates.redeem_fee){
+                try{
+                    const redeem=JSON.parse(rates.redeem_fee);
+                    if(redeem && redeem.length>0){
+                        html+='<div><strong>赎回费率</strong></div><ul>';
+                        redeem.forEach(item=>{ html+=`<li>${item.holding}：${item.rate!==null?item.rate+'%':'--'}</li>`; });
+                        html+='</ul>';
+                    }else html+='<div><strong>赎回费率</strong></div><p>暂无数据</p>';
+                }catch(e){ html+='<div><strong>赎回费率</strong></div><p>数据格式错误</p>'; }
+            }else html+='<div><strong>赎回费率</strong></div><p>暂无数据</p>';
+            document.getElementById('feeBody').innerHTML=html;
+        }catch(e){ console.error(e); }
+    }
+    async function updateLatestHistory(){
+        try{
+            const res=await fetch(`/api/update_latest_history/${fundCode}`);
+            const text=await res.text();
+            console.log(text);
+            setTimeout(()=>loadHistory(),1500);
+        }catch(e){ console.error('更新最新历史数据失败:',e); }
+    }
+    document.getElementById('refreshHistoryBtn').addEventListener('click',async()=>{
+        try{
+            const res=await fetch('/api/refresh_history');
+            const text=await res.text();
+            alert(text);
+            setTimeout(()=>loadHistory(),2000);
+        }catch(e){ alert('导入请求失败'); console.error(e); }
+    });
+    loadDetail(); 
+    loadAssetAllocation(); 
+    loadHistory(); 
+    loadHoldings(); 
+    loadFees();
+    updateLatestHistory();
+</script>
+</body>
+</html>
