@@ -4627,13 +4627,7 @@ scheduler.add_job(
 )
 
 # 早上 7:00 执行缺失基金高级处理
-scheduler.add_job(
-    func=process_missing_funds_advanced,
-    trigger="cron",
-    hour=7,
-    minute=0,
-    id='morning_process_missing'
-
+scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour=7, minute=0, id='morning_process_missing')
 
 
 scheduler.start()
