@@ -1693,7 +1693,7 @@ def supplement_fund_details():
 
         # 获取已存在的净值记录
         cursor.execute("SELECT fund_code, nav_date FROM fund_nav")
-        existing_nav = {(row[0], row[1]) for row in cursor.fetchall()}
+        existing_nav = {(row['fund_code'], row['nav_date']) for row in cursor.fetchall()}
 
         batch_size = 300
         total = len(df_filtered)
