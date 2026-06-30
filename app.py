@@ -1412,16 +1412,20 @@ def fetch_merged_shares():
     cursor = conn.cursor()
 
     # 插入或替换当日份额（使用 ON CONFLICT）
-    for fund_code, row in combined.iterrows():
-        shares = row['fund_shares']
-        if shares is None:
-            continue
+    # 回写计算结果到快照表
+    for fund_code in combined.index:
+        shares_add = combined.loc[fund_code, 'shares_add']
+        shares_change = combined.loc[fund_code, 'shares_change']
+        # 转换 numpy 类型为 Python 原生 float
+        if shares_add is not None:
+            shares_add = float(shares_add)
+        if shares_change is not None:
+            shares_change = float(shares_change)
         cursor.execute('''
-            INSERT INTO lof_funds_snapshot (fund_code, fund_shares, snapshot_date)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (fund_code, snapshot_date) DO UPDATE SET
-                fund_shares = EXCLUDED.fund_shares
-        ''', (fund_code, shares, snapshot_date))
+            UPDATE lof_funds_snapshot 
+            SET shares_add = %s, shares_change = %s
+            WHERE fund_code = %s AND snapshot_date = %s
+        ''', (shares_add, shares_change, fund_code, snapshot_date))
     conn.commit()
 
     # ---------- 修改点：按基金单独查询最近历史记录，而非固定前一日 ----------
