@@ -322,7 +322,7 @@ def process_missing_funds_advanced():
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT fund_code FROM missing_funds")
-    missing_codes = [row[0] for row in cursor.fetchall()]
+    missing_codes = [row['fund_code'] for row in cursor.fetchall()]
     if not missing_codes:
         print("missing_funds 表为空，无需处理")
         conn.close()
@@ -1065,7 +1065,7 @@ def get_missing_funds_list():
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT fund_code FROM missing_funds")
-    funds = [row[0] for row in cursor.fetchall()]
+    funds = [row['fund_code'] for row in cursor.fetchall()]
     conn.close()
     return funds
 
@@ -1290,7 +1290,7 @@ def fetch_sz_shares(retries=3, timeout=15):
                 resp.raise_for_status()
                 data = resp.json()
                 if isinstance(data, list) and len(data) > 0:
-                    rows = data[0].get('data', [])
+                    rows = data['fund_code'].get('data', [])
                     if not rows:
                         break
                     for row in rows:
@@ -3537,7 +3537,7 @@ def update_low_prices(fund_code=None, days=90, use_tencent=False):
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT fund_code FROM lof_funds")
-        codes = [row[0] for row in cursor.fetchall()]
+        codes = [row['fund_code'] for row in cursor.fetchall()]
         conn.close()
 
     print(f"{datetime.now()}: 开始更新 {len(codes)} 只基金的最低价数据...")
