@@ -3249,8 +3249,8 @@ def recalculate_fund_history(fund_code):
         # 只更新估值相关字段，不更新基估(K)、基差(K)、基溢(K)
         cursor.execute('''
             UPDATE lof_history 
-            SET guzhi=?, wucha=?, premium_rate_k=?
-            WHERE fund_code=? AND date=?
+            SET guzhi=%s, wucha=%s, premium_rate_k=%s
+            WHERE fund_code=%s AND date=%s
         ''', (guzhi, wucha, premium_rate_k, fund_code, date))
 
         if nav is not None:
