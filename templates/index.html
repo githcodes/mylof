@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>LOF基金数据看板</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -115,6 +115,24 @@
         .tab-btn:hover:not(.active) {
             background: #e0e0e0;
         }
+
+        /* ===== 手机端优化 ===== */
+        @media (max-width: 768px) {
+        body { padding: 10px; }
+        .container { padding: 10px; }
+        h1 { font-size: 20px; }
+        .admin-buttons { gap: 6px; }
+        .admin-btn { font-size: 11px; padding: 4px 8px; }
+        .toolbar { flex-direction: column; align-items: stretch; gap: 6px; }
+        .toolbar div { display: flex; gap: 6px; flex-wrap: wrap; }
+        .tab-btn { font-size: 12px; padding: 4px 10px; }
+        table { min-width: 100%; }
+        th, td { padding: 2px 3px; font-size: 10px; }
+        /* 保留所有列，不隐藏 */
+        .checkbox-col, .star-col { width: 30px; }
+        .star-btn { font-size: 14px; }
+        .update-time { font-size: 10px; }
+    }
     </style>
 </head>
 <body>
@@ -207,12 +225,12 @@
 
 <script>
     let allFunds = [];
-    let currentTab = 'all';   // 'all', 'lof', 'dingkai'
+    let currentTab = 'all';
     let filteredFunds = [];
-    let sortColumn = null;
-    let sortAsc = true;
+    let sortColumn = 'premium_rate';
+    let sortAsc = false;
     let favoriteFunds = new Set();
-    let missingFundsList = [];  // 存储从后端获取的缺失基金列表
+    let missingFundsList = [];
 
     async function loadMissingFundsList() {
         try {
@@ -223,18 +241,15 @@
             console.log(`已加载缺失基金列表，共 ${missingFundsList.length} 只基金`);
         } catch (err) {
             console.error('加载缺失基金列表失败:', err);
-            // 失败时置空，不影响其他功能
             missingFundsList = [];
         }
     }
 
     const STORAGE_KEY = 'lof_favorites';
-    
     const numericColumns = ['current_price', 'change_percent', 'nav', 'estimated_nav',
                             'premium_rate', 'estimated_premium_rate', 'daily_purchase_limit','shares_add',
                             'total_market_value', 'volume_hands', 'volume_amount'];
 
-    // 判断是否为定开基金（名称含“定开”或代码以506开头）
     function isDingkai(f) {
         return (f.fund_name && f.fund_name.includes('定开')) || (f.fund_code && f.fund_code.startsWith('506'));
     }
@@ -244,36 +259,22 @@
         callApi(`/admin/update_all_recent?days=${days}`, `更新最近${days}天数据（集思录）`);
     }
 
-    // 过滤函数
     function filterFundsByTab(funds, tab) {
         if (tab === 'all') return funds;
-        if (tab === 'lof') {
-            // LOF基金：排除定开基金
-            return funds.filter(f => !isDingkai(f));
-        }
-        if (tab === 'dingkai') {
-            // 定开基金：包含定开或506开头
-            return funds.filter(f => isDingkai(f));
-        }
-        if (tab === 'missing') {
-            // 使用动态获取的缺失基金列表进行过滤
-            return funds.filter(f => missingFundsList.includes(f.fund_code));
-        }
+        if (tab === 'lof') return funds.filter(f => !isDingkai(f));
+        if (tab === 'dingkai') return funds.filter(f => isDingkai(f));
+        if (tab === 'missing') return funds.filter(f => missingFundsList.includes(f.fund_code));
         return funds;
     }
 
     function loadFavorites() {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) {
-            try {
-                const arr = JSON.parse(stored);
-                favoriteFunds = new Set(arr);
-            } catch(e) {}
+            try { favoriteFunds = new Set(JSON.parse(stored)); } catch(e) {}
         }
     }
     function saveFavorites() {
-        const arr = Array.from(favoriteFunds);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(favoriteFunds)));
     }
     function toggleFavorite(fundCode) {
         if (favoriteFunds.has(fundCode)) {
@@ -286,9 +287,7 @@
         saveFavorites();
         renderTable(filteredFunds);
     }
-    function isFavorite(fundCode) {
-        return favoriteFunds.has(fundCode);
-    }
+    function isFavorite(fundCode) { return favoriteFunds.has(fundCode); }
 
     function safeNumber(val) {
         if (val === null || val === undefined || val === '-') return null;
@@ -301,10 +300,7 @@
     }
     function isValidValue(val, isNumeric) {
         if (val === null || val === undefined || val === '-') return false;
-        if (isNumeric) {
-            let num = parseFloat(val);
-            return !isNaN(num);
-        }
+        if (isNumeric) { let num = parseFloat(val); return !isNaN(num); }
         return String(val).trim() !== '';
     }
     function getCompareValue(val, isNumeric) {
@@ -331,12 +327,8 @@
         return true;
     }
     function sortAndRender() {
-        if (!sortColumn) {
-            renderTable(filteredFunds);
-            return;
-        }
+        if (!sortColumn) { renderTable(filteredFunds); return; }
         if (isColumnAllInvalid(sortColumn, filteredFunds)) {
-            console.log(`列 ${sortColumn} 无有效数据，不排序`);
             renderTable(filteredFunds);
             return;
         }
@@ -370,7 +362,6 @@
             if (isFav) rowClass += 'favorite-row';
             if (isDingkaiFlag) rowClass += ' dingkai-row';
 
-            // 构建基金名称列（包含暂停状态）
             let nameHtml = `<a href="/fund/${f.fund_code}" class="fund-link" target="_blank">${f.fund_name || '-'}</a>`;
             if (f.purchase_status && f.purchase_status.includes('暂停')) {
                 nameHtml += `<span style="background-color: #ffeb3b; padding: 0 4px; border-radius: 2px; font-weight:bold;">暂停</span>`;
@@ -407,11 +398,7 @@
         filteredFunds = filterFundsByTab(allFunds, currentTab);
         sortAndRender();
         document.querySelectorAll('.tab-btn').forEach(btn => {
-            if (btn.getAttribute('data-tab') === tab) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
+            btn.classList.toggle('active', btn.getAttribute('data-tab') === tab);
         });
     }
 
@@ -422,7 +409,6 @@
             const res = await fetch('/api/lof/list');
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const funds = await res.json();
-            console.log(`获取到 ${funds.length} 条基金数据`);
             allFunds = funds;
             filteredFunds = filterFundsByTab(allFunds, currentTab);
             sortAndRender();
@@ -487,9 +473,7 @@
         toast.style.backgroundColor = isError ? '#c0392b' : '#2c3e50';
         toast.textContent = msg;
         toast.style.opacity = '1';
-        setTimeout(() => {
-            toast.style.opacity = '0';
-        }, 3000);
+        setTimeout(() => { toast.style.opacity = '0'; }, 3000);
     }
 
     async function callApi(url, taskName) {
@@ -531,18 +515,33 @@
     }
 
     function initTabs() {
-        const tabs = document.querySelectorAll('.tab-btn');
-        tabs.forEach(btn => {
+        document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                const tab = btn.getAttribute('data-tab');
-                switchTab(tab);
+                switchTab(btn.getAttribute('data-tab'));
             });
         });
     }
 
+    // ===== 初始化 =====
     window.onload = () => {
+        // 设置默认排序为溢价率降序，并在表头显示指示器
+        sortColumn = 'premium_rate';
+        sortAsc = false;
+        // 更新表头指示器
+        const headers = document.querySelectorAll('#fundTable th');
+        headers.forEach(th => {
+            const indicator = th.querySelector('.sort-indicator');
+            if (!indicator) return;
+            const col = th.getAttribute('data-col');
+            if (col === 'premium_rate') {
+                indicator.textContent = ' ▼';
+            } else {
+                indicator.textContent = '';
+            }
+        });
+
         loadFavorites();
-        loadMissingFundsList();   // 新增：加载缺失基金列表
+        loadMissingFundsList();
         loadData();
         setInterval(loadData, 60000);
         setupSorting();
