@@ -3505,7 +3505,7 @@ def insert_or_replace_lof_history(
                         index_change = EXCLUDED.index_change,
                         heavy_change = EXCLUDED.heavy_change,
                         nav_change_pct = EXCLUDED.nav_change_pct,
-                        low = COALESCE(excluded.low, low)
+                        low = COALESCE(excluded.low, lof_history.low)
                 ''', (fund_code, date, close, nav_date, nav,
                     calc['jigu'], calc['jiyi'], calc['jicha'], None, None, None,
                     calc['guzhi'], calc['wucha'], calc['premium_rate_k'], premium_rate,
@@ -4647,9 +4647,20 @@ scheduler.add_job(
     id='morning_update_all_latest'
 )
 
+# 早上 6:00 执行全量最新数据更新
+scheduler.add_job(
+    func=do_update_all_latest,
+    trigger="cron",
+    hour=9,
+    minute=15,
+    id='morning_update_all'
+)
+
 # 早上 7:00 执行缺失基金高级处理
 scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour=7, minute=0, id='morning_process_missing')
 
+# 早上 9:30 执行缺失基金高级处理
+scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour=9, minute=30, id='morning_process')
 
 scheduler.start()
 
