@@ -205,7 +205,7 @@
                     <th data-col="nav_date">净值日期 <span class="sort-indicator"></span></th>
                     <th data-col="estimated_nav">估算净值 <span class="sort-indicator"></span></th>
                     <th data-col="premium_rate">溢价率(%) <span class="sort-indicator"></span></th>
-                    <th data-col="estimated_premium_rate">估算溢价率(%) <span class="sort-indicator"></span></th>
+                    <th data-col="estimated_premium_rate">估算<br>溢价率(%) <span class="sort-indicator"></span></th>
                     <th data-col="daily_purchase_limit">日申购限额 <span class="sort-indicator"></span></th>
                     <th data-col="shares_add">份额新增<br>(万份)</br> <span class="sort-indicator"></span></th>
                     <th data-col="total_market_value">总市值 <span class="sort-indicator"></span></th>
@@ -364,7 +364,7 @@
 
             let nameHtml = `<a href="/fund/${f.fund_code}" class="fund-link" target="_blank">${f.fund_name || '-'}</a>`;
             if (f.purchase_status && f.purchase_status.includes('暂停')) {
-                nameHtml += `<span style="background-color: #ffeb3b; padding: 0 4px; border-radius: 2px; font-weight:bold;">暂停</span>`;
+                nameHtml += `<br><span style="background-color: #ffeb3b; padding: 0 4px; border-radius: 2px;font-weight:bold;">暂停</span>`;
             }
 
             html += `<tr class="${rowClass}">
