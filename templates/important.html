@@ -31,29 +31,26 @@
         .star-btn { background: none; border: none; font-size: 16px; cursor: pointer; color: #ccc; transition: color 0.2s; }
         .star-btn.active { color: #f1c40f; }
         .star-btn:hover { color: #f39c12; }
-        /* 重点基金样式 */
-        .important-fund {
+        /* 强烈关注基金红色文字（新增） */
+        .hot-red-text {
             color: #e74c3c !important;
             font-weight: bold !important;
         }
-        .important-fund a {
+        .hot-red-text a {
             color: #e74c3c !important;
             font-weight: bold !important;
             text-decoration: none;
         }
-        .important-fund a:hover {
+        .hot-red-text a:hover {
             text-decoration: underline;
         }
-        /* 强烈关注样式（新增） */
+        /* 强烈关注背景 */
         .hot-fund {
             background-color: #fff3e0 !important;
             border-left: 4px solid #e67e22 !important;
         }
         .hot-fund:hover {
             background-color: #ffe0b3 !important;
-        }
-        .hot-fund a {
-            font-weight: bold !important;
         }
         /* 标记按钮组 */
         .mark-btns {
@@ -73,9 +70,6 @@
         .mark-btn.active {
             opacity: 1;
             transform: scale(1.1);
-        }
-        .mark-btn:hover {
-            transform: scale(1.2);
         }
         .mark-btn.hot-active {
             color: #e67e22;
@@ -177,7 +171,7 @@
 <script>
     // ============ 存储键 ============
     const IMPORTANT_STORAGE_KEY = 'lof_important_funds';
-    const HOT_STORAGE_KEY = 'lof_hot_funds';        // 新增：强烈关注
+    const HOT_STORAGE_KEY = 'lof_hot_funds';
     const FAVORITE_STORAGE_KEY = 'lof_favorites';
 
     // ============ 数据 ============
@@ -185,7 +179,7 @@
     let hotFunds = new Set();
     let currentImportantList = [];
     let currentSort = { field: 'fund_code', order: 'asc' };
-    let currentFilter = 'all'; // 'all', 'important', 'hot', 'both'
+    let currentFilter = 'all';
 
     // ============ 存储操作 ============
     function loadImportantFromLocal() {
@@ -415,7 +409,8 @@
             const isFav = isFavorite(f.fund_code);
             const isImp = isImportant(f.fund_code);
             const isHotFlag = isHot(f.fund_code);
-            const redStyle = isImp ? 'color:#e74c3c !important; font-weight:bold;' : '';
+            // 只有强烈关注（🔥）的基金才显示红色文字
+            const redStyle = isHotFlag ? 'color:#e74c3c !important; font-weight:bold;' : '';
             const rowClass = isHotFlag ? 'hot-fund' : '';
             const impActive = isImp ? 'active important-active' : '';
             const hotActive = isHotFlag ? 'active hot-active' : '';
