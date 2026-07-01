@@ -196,9 +196,9 @@
                     <th class="checkbox-col"><input type="checkbox" id="selectAll" onchange="toggleAll()"></th>
                     <th class="star-col">⭐</th>
                     <!-- 基金代码列保留 -->
-                    <th data-col="fund_code">基金代码 <span class="sort-indicator"></span></th>
-                    <!-- 基金名称列（合并申购状态） -->
-                    <th data-col="fund_name">基金名称 <span class="sort-indicator"></span></th>
+                    <th data-col="fund_code">基金 <span class="sort-indicator"></span></th>
+                    <!-- 基金名称列（合并申购状态）
+                    <th data-col="fund_name">基金名称 <span class="sort-indicator"></span></th> -->
                     <th data-col="current_price">最新交易价 <span class="sort-indicator"></span></th>
                     <th data-col="change_percent">涨跌幅(%) <span class="sort-indicator"></span></th>
                     <th data-col="nav">最新净值 <span class="sort-indicator"></span></th>
@@ -362,16 +362,22 @@
             if (isFav) rowClass += 'favorite-row';
             if (isDingkaiFlag) rowClass += ' dingkai-row';
 
-            let nameHtml = `<a href="/fund/${f.fund_code}" class="fund-link" target="_blank">${f.fund_name || '-'}</a>`;
+            // 构建基金名称列（包含暂停状态）
+            let codeNameHtml = `<div style="display:flex; flex-direction:column; line-height:1.5;">
+                <a href="/fund/${f.fund_code}" class="fund-link" target="_blank" style="font-weight:bold;">${f.fund_name || '-'}</a>
+                <span>`;
+            codeNameHtml += `<a href="/fund/${f.fund_code}" class="fund-link" target="_blank">${f.fund_code || '-'}</a>`;
             if (f.purchase_status && f.purchase_status.includes('暂停')) {
-                nameHtml += `<br><span style="background-color: #ffeb3b; padding: 0 4px; border-radius: 2px;font-weight:bold;">暂停</span>`;
+                codeNameHtml  += `<span align-items: center; style="background-color: #ffeb3b; padding: 0 4px; border-radius: 2px; font-weight:bold;">暂停</span>`;
             }
+
+            codeNameHtml += `</span></div>`;
 
             html += `<tr class="${rowClass}">
                 <td class="checkbox-col"><input type="checkbox" class="fund-checkbox" value="${f.fund_code}"></td>
                 <td class="star-col"><button class="star-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${f.fund_code}')">${isFav ? '★' : '☆'}</button></td>
-                <td><a href="/fund/${f.fund_code}" class="fund-link" target="_blank">${f.fund_code || '-'}</a></td>
-                <td>${nameHtml}</td>
+              //  <td><a href="/fund/${f.fund_code}" class="fund-link" target="_blank">${f.fund_code || '-'}</a></td>
+                <td>${codeNameHtml}</td>
                 <td>${formatNumber(price, 3)}</td>
                 <td class="${changeClass}">${formatNumber(change, 2)}%</td>
                 <td>${formatNumber(nav, 4)}</td>
