@@ -4625,6 +4625,11 @@ def api_missing_funds_list():
     """返回缺失基金列表（MISSING_JISILU_FUNDS）"""
     return jsonify(MISSING_JISILU_FUNDS)
 
+@app.route('/important')
+def important():
+    """重点基金页面 """
+    return render_template('important.html')
+
 
 # ---------- 定时任务 ----------
 scheduler = BackgroundScheduler()
