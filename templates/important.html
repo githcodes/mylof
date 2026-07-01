@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=0.3, maximum-scale=5.0, user-scalable=yes">
-    <title>我的自选 - LOF看板</title>
+    <title>重点基金 - LOF看板</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; padding: 16px; }
@@ -16,7 +16,7 @@
         .back-link:hover { background: #2c3e50; }
         .update-time { font-size: 12px; color: #666; }
         .table-wrapper { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; min-width: 1200px; }
+        table { width: 100%; border-collapse: collapse; min-width: 1100px; }
         th, td { padding: 6px 5px; text-align: left; border-bottom: 1px solid #ddd; white-space: nowrap; font-size: 12px; }
         th { background: #2c3e50; color: white; position: sticky; top: 0; cursor: pointer; user-select: none; }
         th:hover { background: #1e2b38; }
@@ -26,70 +26,132 @@
         .negative { color: #27ae60; }
         .fund-link { color: #3498db; text-decoration: none; }
         .fund-link:hover { text-decoration: underline; }
-        .status-not-suspended { background-color: #fff3cd; }
-        .no-favorites { text-align: center; padding: 40px; font-size: 16px; color: #666; }
+        .no-data { text-align: center; padding: 40px; font-size: 16px; color: #666; }
         .star-col { width: 40px; text-align: center; }
-        .star-btn { background: none; border: none; font-size: 16px; cursor: pointer; color: #f1c40f; }
+        .star-btn { background: none; border: none; font-size: 16px; cursor: pointer; color: #ccc; transition: color 0.2s; }
+        .star-btn.active { color: #f1c40f; }
+        .star-btn:hover { color: #f39c12; }
         /* 重点基金样式 */
-        /* 重点基金样式 */
-        .important-fund,
-        .important-fund a,
-        .fund-link.important-fund,
-        .fund-link.important-fund a {
+        .important-fund {
             color: #e74c3c !important;
             font-weight: bold !important;
         }
-        .important-fund a:hover,
-        .fund-link.important-fund a:hover {
+        .important-fund a {
+            color: #e74c3c !important;
+            font-weight: bold !important;
+            text-decoration: none;
+        }
+        .important-fund a:hover {
             text-decoration: underline;
         }
-        
-
-        /* ===== 手机端优化 ===== */
+        /* 强烈关注样式（新增） */
+        .hot-fund {
+            background-color: #fff3e0 !important;
+            border-left: 4px solid #e67e22 !important;
+        }
+        .hot-fund:hover {
+            background-color: #ffe0b3 !important;
+        }
+        .hot-fund a {
+            font-weight: bold !important;
+        }
+        /* 标记按钮组 */
+        .mark-btns {
+            display: flex;
+            gap: 2px;
+            align-items: center;
+        }
+        .mark-btn {
+            background: none;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 0 2px;
+            transition: transform 0.2s;
+            opacity: 0.6;
+        }
+        .mark-btn.active {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+        .mark-btn:hover {
+            transform: scale(1.2);
+        }
+        .mark-btn.hot-active {
+            color: #e67e22;
+        }
+        .mark-btn.important-active {
+            color: #e74c3c;
+        }
+        .mark-btn.fav-active {
+            color: #f1c40f;
+        }
+        /* 筛选标签 */
+        .filter-tags {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .filter-tag {
+            padding: 4px 12px;
+            border-radius: 16px;
+            background: #f0f0f0;
+            cursor: pointer;
+            font-size: 12px;
+            border: 2px solid transparent;
+            transition: 0.2s;
+        }
+        .filter-tag.active {
+            border-color: #3498db;
+            background: #e3f0ff;
+        }
+        .filter-tag:hover {
+            background: #e0e0e0;
+        }
+        /* 手机端适配 */
         @media (max-width: 768px) {
             body { padding: 8px; }
-            .container { padding: 8px; }
-            h1 { font-size: 20px; margin-bottom: 10px; }
-            .toolbar { flex-direction: column; align-items: stretch; gap: 6px; }
-            .toolbar div { display: flex; gap: 6px; flex-wrap: wrap; }
-            .refresh-btn, .back-link { font-size: 12px; padding: 6px 12px; }
-            .update-time { font-size: 10px; }
-            th, td { padding: 3px 4px; font-size: 10px; }
-            th { font-size: 10px; }
-            .star-btn { font-size: 14px; }
-            .star-col { width: 30px; }
-            /* 保留所有列，表格可横向滚动 */
-            table { min-width: 1000px; }
-        }
-        @media (max-width: 480px) {
-            .container { padding: 4px; }
-            .refresh-btn, .back-link { font-size: 11px; padding: 4px 8px; }
-            th, td { padding: 2px 3px; font-size: 9px; }
-            .star-btn { font-size: 12px; }
-            .star-col { width: 24px; }
-            table { min-width: 800px; }
+            .container { padding: 10px; }
+            th, td { font-size: 10px; padding: 2px 3px; }
+            .toolbar { flex-direction: column; align-items: stretch; }
+            .toolbar div { display: flex; flex-wrap: wrap; gap: 6px; }
+            .back-link, .refresh-btn { font-size: 12px; padding: 4px 8px; }
+            table { min-width: 100%; }
+            th:nth-child(9), td:nth-child(9) { display: none; }
+            th:nth-child(10), td:nth-child(10) { display: none; }
+            th:nth-child(12), td:nth-child(12) { display: none; }
+            th:nth-child(14), td:nth-child(14) { display: none; }
+            .mark-btn { font-size: 14px; }
         }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>⭐ 我的自选基金</h1>
+    <h1>❤️🔥 重点 & 强烈关注</h1>
+    
+    <!-- 筛选标签 -->
+    <div class="filter-tags">
+        <span class="filter-tag active" data-filter="all" onclick="setFilter('all')">📋 全部</span>
+        <span class="filter-tag" data-filter="important" onclick="setFilter('important')">❤️ 重点</span>
+        <span class="filter-tag" data-filter="hot" onclick="setFilter('hot')">🔥 强烈关注</span>
+        <span class="filter-tag" data-filter="both" onclick="setFilter('both')">❤️🔥 两者都是</span>
+    </div>
+
     <div class="toolbar">
         <div>
             <a href="/" class="back-link">← 返回首页</a>
-            <button class="refresh-btn" onclick="loadFavorites()">🔄 刷新自选</button>
-            <button class="refresh-btn" style="background:#e67e22;" onclick="toggleAllImportant()">⭐ 切换所有重要标记</button>
-            <a href="/important" class="back-link" style="background:#e67e22;">❤️ 查看重点</a>
+            <a href="/favorites" class="back-link" style="background:#e67e22;">⭐ 自选</a>
+            <button class="refresh-btn" onclick="loadImportantFunds()">🔄 刷新</button>
         </div>
         <span class="update-time" id="updateTime"></span>
     </div>
     <div class="table-wrapper">
-        <table id="favTable">
+        <table id="importantTable">
             <thead>
                 <tr>
-                    <th class="star-col">⭐</th>
-                    <th data-sort="fund_code">基金代码 <span class="sort-indicator"></span></th>
-        
+                    <th class="star-col">标记</th>
+                    <th data-sort="fund_code">基金代码/名称 <span class="sort-indicator"></span></th>
                     <th data-sort="current_price">最新交易价 <span class="sort-indicator"></span></th>
                     <th data-sort="change_percent">涨跌幅(%) <span class="sort-indicator"></span></th>
                     <th data-sort="nav">最新净值 <span class="sort-indicator"></span></th>
@@ -98,94 +160,127 @@
                     <th data-sort="premium_rate">溢价率(%) <span class="sort-indicator"></span></th>
                     <th data-sort="estimated_premium_rate">估算溢价率(%) <span class="sort-indicator"></span></th>
                     <th data-sort="daily_purchase_limit">日申购限额 <span class="sort-indicator"></span></th>
-                    <th data-sort="shares_add">份额新增<br>(万份)</br> <span class="sort-indicator"></span></th>
+                    <th data-sort="shares_add">份额新增<br>(万份) <span class="sort-indicator"></span></th>
                     <th data-sort="total_market_value">总市值 <span class="sort-indicator"></span></th>
                     <th data-sort="volume_hands">成交量(手) <span class="sort-indicator"></span></th>
                     <th data-sort="volume_amount">成交额 <span class="sort-indicator"></span></th>
                     <th>详情</th>
                 </tr>
             </thead>
-            <tbody id="favTableBody">
-                <tr><td colspan="16" style="text-align:center;">加载中...</td></tr>
+            <tbody id="importantTableBody">
+                <tr><td colspan="15" style="text-align:center;">加载中...</td></tr>
             </tbody>
         </table>
     </div>
 </div>
 
 <script>
-    let favoriteFunds = new Set();
-    const STORAGE_KEY = 'lof_favorites';
+    // ============ 存储键 ============
     const IMPORTANT_STORAGE_KEY = 'lof_important_funds';
-    let importantFunds = new Set();
-    let currentFavList = [];
-    let currentSort = { field: 'fund_code', order: 'asc' };
+    const HOT_STORAGE_KEY = 'lof_hot_funds';        // 新增：强烈关注
+    const FAVORITE_STORAGE_KEY = 'lof_favorites';
 
-    // ---------- 重点基金管理 ----------
-    function loadImportantFunds() {
+    // ============ 数据 ============
+    let importantFunds = new Set();
+    let hotFunds = new Set();
+    let currentImportantList = [];
+    let currentSort = { field: 'fund_code', order: 'asc' };
+    let currentFilter = 'all'; // 'all', 'important', 'hot', 'both'
+
+    // ============ 存储操作 ============
+    function loadImportantFromLocal() {
         const stored = localStorage.getItem(IMPORTANT_STORAGE_KEY);
-        if (stored) {
-            try {
-                const arr = JSON.parse(stored);
-                importantFunds = new Set(arr);
-            } catch(e) {}
-        }
+        if (stored) try { importantFunds = new Set(JSON.parse(stored)); } catch(e) {}
+        return importantFunds;
     }
-    function saveImportantFunds() {
-        const arr = Array.from(importantFunds);
-        localStorage.setItem(IMPORTANT_STORAGE_KEY, JSON.stringify(arr));
+    function saveImportantToLocal() {
+        localStorage.setItem(IMPORTANT_STORAGE_KEY, JSON.stringify(Array.from(importantFunds)));
     }
-    function isImportant(fundCode) {
-        return importantFunds.has(fundCode);
+    function loadHotFromLocal() {
+        const stored = localStorage.getItem(HOT_STORAGE_KEY);
+        if (stored) try { hotFunds = new Set(JSON.parse(stored)); } catch(e) {}
+        return hotFunds;
     }
+    function saveHotToLocal() {
+        localStorage.setItem(HOT_STORAGE_KEY, JSON.stringify(Array.from(hotFunds)));
+    }
+    function loadFavoritesFromLocal() {
+        const stored = localStorage.getItem(FAVORITE_STORAGE_KEY);
+        if (stored) try { return new Set(JSON.parse(stored)); } catch(e) {}
+        return new Set();
+    }
+    function saveFavoritesToLocal(favs) {
+        localStorage.setItem(FAVORITE_STORAGE_KEY, JSON.stringify(Array.from(favs)));
+    }
+
+    // ============ 切换标记 ============
     function toggleImportant(fundCode) {
         if (importantFunds.has(fundCode)) {
             importantFunds.delete(fundCode);
             showToast(`已取消重点标记 ${fundCode}`);
         } else {
             importantFunds.add(fundCode);
-            showToast(`已标记为重点基金 ${fundCode}`);
+            showToast(`已标记为重点 ❤️ ${fundCode}`);
         }
-        saveImportantFunds();
-        renderTable();
-    }
-    function toggleAllImportant() {
-        const allMarked = currentFavList.every(f => importantFunds.has(f.fund_code));
-        if (allMarked) {
-            importantFunds.clear();
-            showToast("已取消所有重点标记");
-        } else {
-            currentFavList.forEach(f => importantFunds.add(f.fund_code));
-            showToast("已将所有自选基金标记为重点");
-        }
-        saveImportantFunds();
-        renderTable();
+        saveImportantToLocal();
+        loadImportantFunds();
     }
 
-    // ---------- 自选管理 ----------
-    function loadFavoritesFromLocal() {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-            try {
-                const arr = JSON.parse(stored);
-                favoriteFunds = new Set(arr);
-            } catch(e) {}
+    function toggleHot(fundCode) {
+        if (hotFunds.has(fundCode)) {
+            hotFunds.delete(fundCode);
+            showToast(`已取消强烈关注 ${fundCode}`);
+        } else {
+            hotFunds.add(fundCode);
+            showToast(`已标记为强烈关注 🔥 ${fundCode}`);
         }
+        saveHotToLocal();
+        loadImportantFunds();
     }
-    function saveFavorites() {
-        const arr = Array.from(favoriteFunds);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
-    }
+
     function toggleFavorite(fundCode) {
-        if (favoriteFunds.has(fundCode)) {
-            favoriteFunds.delete(fundCode);
+        const favs = loadFavoritesFromLocal();
+        if (favs.has(fundCode)) {
+            favs.delete(fundCode);
         } else {
-            favoriteFunds.add(fundCode);
+            favs.add(fundCode);
         }
-        saveFavorites();
-        loadFavorites();
+        saveFavoritesToLocal(favs);
+        loadImportantFunds();
     }
 
-    // ---------- 辅助函数 ----------
+    function isFavorite(fundCode) {
+        return loadFavoritesFromLocal().has(fundCode);
+    }
+    function isImportant(fundCode) {
+        return importantFunds.has(fundCode);
+    }
+    function isHot(fundCode) {
+        return hotFunds.has(fundCode);
+    }
+
+    // ============ 过滤 ============
+    function setFilter(type) {
+        currentFilter = type;
+        document.querySelectorAll('.filter-tag').forEach(tag => {
+            tag.classList.toggle('active', tag.dataset.filter === type);
+        });
+        applyFilterAndRender();
+    }
+
+    function applyFilterAndRender() {
+        let filtered = currentImportantList;
+        if (currentFilter === 'important') {
+            filtered = filtered.filter(f => isImportant(f.fund_code));
+        } else if (currentFilter === 'hot') {
+            filtered = filtered.filter(f => isHot(f.fund_code));
+        } else if (currentFilter === 'both') {
+            filtered = filtered.filter(f => isImportant(f.fund_code) && isHot(f.fund_code));
+        }
+        renderTable(filtered);
+    }
+
+    // ============ 辅助函数 ============
     function safeNumber(val) {
         if (val === null || val === undefined || val === '-') return null;
         let num = parseFloat(val);
@@ -219,22 +314,22 @@
         toast.style.backgroundColor = isError ? '#c0392b' : '#2c3e50';
         toast.textContent = msg;
         toast.style.opacity = '1';
-        setTimeout(() => {
-            toast.style.opacity = '0';
-        }, 3000);
+        setTimeout(() => { toast.style.opacity = '0'; }, 2500);
     }
 
-    // ---------- 排序函数 ----------
-    function sortFavList(list, field, order) {
+    // ============ 排序 ============
+    function sortList(list, field, order) {
         return [...list].sort((a, b) => {
             let aVal, bVal;
             switch (field) {
                 case 'fund_code':
+                    aVal = a.fund_code || '';
+                    bVal = b.fund_code || '';
+                    if (order === 'asc') return aVal.localeCompare(bVal);
+                    else return bVal.localeCompare(aVal);
                 case 'fund_name':
-                case 'nav_date':
-                case 'purchase_status':
-                    aVal = a[field] || '';
-                    bVal = b[field] || '';
+                    aVal = a.fund_name || '';
+                    bVal = b.fund_name || '';
                     if (order === 'asc') return aVal.localeCompare(bVal, 'zh');
                     else return bVal.localeCompare(aVal, 'zh');
                 case 'current_price':
@@ -286,19 +381,17 @@
                     bVal = b[field] ?? '';
             }
             if (typeof aVal === 'number' && typeof bVal === 'number') {
-                if (order === 'asc') return aVal - bVal;
-                else return bVal - aVal;
+                return order === 'asc' ? aVal - bVal : bVal - aVal;
             } else {
                 const aStr = String(aVal);
                 const bStr = String(bVal);
-                if (order === 'asc') return aStr.localeCompare(bStr);
-                else return bStr.localeCompare(aStr);
+                return order === 'asc' ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
             }
         });
     }
 
     function updateSortIndicators() {
-        document.querySelectorAll('#favTable th[data-sort]').forEach(th => {
+        document.querySelectorAll('#importantTable th[data-sort]').forEach(th => {
             const field = th.getAttribute('data-sort');
             const indicator = th.querySelector('.sort-indicator');
             if (field === currentSort.field) {
@@ -309,15 +402,25 @@
         });
     }
 
-    function renderTable() {
-        const tbody = document.getElementById('favTableBody');
-        if (!currentFavList.length) {
-            tbody.innerHTML = `<tr><td colspan="15" class="no-favorites">暂无自选基金，请回到<a href="/">首页</a>点击⭐添加</td></tr>`;
+    // ============ 渲染 ============
+    function renderTable(funds) {
+        const tbody = document.getElementById('importantTableBody');
+        if (!funds.length) {
+            tbody.innerHTML = `<tr><td colspan="15" class="no-data">暂无符合条件的基金</td></tr>`;
             document.getElementById('updateTime').innerHTML = '';
             return;
         }
         let html = '';
-        for (let f of currentFavList) {
+        for (let f of funds) {
+            const isFav = isFavorite(f.fund_code);
+            const isImp = isImportant(f.fund_code);
+            const isHotFlag = isHot(f.fund_code);
+            const redStyle = isImp ? 'color:#e74c3c !important; font-weight:bold;' : '';
+            const rowClass = isHotFlag ? 'hot-fund' : '';
+            const impActive = isImp ? 'active important-active' : '';
+            const hotActive = isHotFlag ? 'active hot-active' : '';
+            const favActive = isFav ? 'active fav-active' : '';
+
             let price = safeNumber(f.current_price);
             let change = safeNumber(f.change_percent);
             let nav = safeNumber(f.nav);
@@ -328,16 +431,8 @@
             let changeClass = (change !== null && change >= 0) ? 'positive' : 'negative';
             let premiumClass = (premium !== null && premium >= 0) ? 'positive' : 'negative';
             let estPremClass = (estPrem !== null && estPrem >= 0) ? 'positive' : 'negative';
-            const isFav = favoriteFunds.has(f.fund_code);
-            const isImp = isImportant(f.fund_code);
-        
-            
-            // 构建基金名称列（包含暂停状态）
-            // 在循环内，已经定义了 const isImp = isImportant(f.fund_code);
-            // 添加红色样式变量
-            const redStyle = isImp ? 'color:#e74c3c !important; font-weight:bold;' : '';
 
-            // 构建基金名称/代码合并列（名称在上，代码在下，符合你的要求）
+            // 构建基金代码/名称
             let codeNameHtml = `<div style="display:flex; flex-direction:column; line-height:1.5;">
                 <a href="/fund/${f.fund_code}" class="fund-link" target="_blank" style="font-weight:bold; ${redStyle}">${f.fund_name || '-'}</a>
                 <span>`;
@@ -347,12 +442,13 @@
             }
             codeNameHtml += `</span></div>`;
 
-            
-    
-            html += `<tr>
+            html += `<tr class="${rowClass}">
                 <td class="star-col">
-                    <button class="star-btn" onclick="toggleFavorite('${f.fund_code}')">${isFav ? '★' : '☆'}</button>
-                    <button class="star-btn" style="color:#e67e22; font-size:14px;" onclick="toggleImportant('${f.fund_code}')">${isImp ? '❤️' : '♡'}</button>
+                    <div class="mark-btns">
+                        <button class="mark-btn ${favActive}" onclick="toggleFavorite('${f.fund_code}')" title="自选">${isFav ? '⭐' : '☆'}</button>
+                        <button class="mark-btn ${impActive}" onclick="toggleImportant('${f.fund_code}')" title="重点">${isImp ? '❤️' : '♡'}</button>
+                        <button class="mark-btn ${hotActive}" onclick="toggleHot('${f.fund_code}')" title="强烈关注">${isHotFlag ? '🔥' : '❄️'}</button>
+                    </div>
                 </td>
                 <td>${codeNameHtml}</td>
                 <td>${formatNumber(price, 3)}</td>
@@ -371,36 +467,45 @@
             </tr>`;
         }
         tbody.innerHTML = html;
-        if (currentFavList.length && currentFavList[0]?.updated_at) {
-            document.getElementById('updateTime').innerHTML = `数据更新时间: ${new Date(currentFavList[0].updated_at).toLocaleString()}`;
+        if (funds.length && funds[0]?.updated_at) {
+            document.getElementById('updateTime').innerHTML = `数据更新时间: ${new Date(funds[0].updated_at).toLocaleString()}`;
         }
     }
 
-
-    async function loadFavorites() {
-        const tbody = document.getElementById('favTableBody');
-        tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;">加载中...</td></tr>';
+    // ============ 加载数据 ============
+    async function loadImportantFunds() {
+        const tbody = document.getElementById('importantTableBody');
+        tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;">加载中...</td></tr>';
         try {
+            loadImportantFromLocal();
+            loadHotFromLocal();
+            const allImportant = new Set([...importantFunds, ...hotFunds]);
+            if (allImportant.size === 0) {
+                currentImportantList = [];
+                renderTable([]);
+                return;
+            }
             const res = await fetch('/api/lof/list');
             if (!res.ok) throw new Error('获取数据失败');
             const allFunds = await res.json();
-            const favFunds = allFunds.filter(f => favoriteFunds.has(f.fund_code));
-            if (favFunds.length === 0) {
-                currentFavList = [];
-                renderTable();
+            const matched = allFunds.filter(f => allImportant.has(f.fund_code));
+            if (matched.length === 0) {
+                currentImportantList = [];
+                renderTable([]);
                 return;
             }
-            currentFavList = sortFavList(favFunds, currentSort.field, currentSort.order);
-            renderTable();
+            currentImportantList = sortList(matched, currentSort.field, currentSort.order);
+            applyFilterAndRender();
             updateSortIndicators();
         } catch (err) {
             console.error('加载失败:', err);
-            tbody.innerHTML = '<tr><td colspan="16">加载失败，请检查网络</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="15">加载失败，请检查网络</td></tr>';
         }
     }
 
+    // ============ 排序设置 ============
     function setupSorting() {
-        document.querySelectorAll('#favTable th[data-sort]').forEach(th => {
+        document.querySelectorAll('#importantTable th[data-sort]').forEach(th => {
             th.addEventListener('click', () => {
                 const field = th.getAttribute('data-sort');
                 if (currentSort.field === field) {
@@ -409,19 +514,20 @@
                     currentSort.field = field;
                     currentSort.order = 'asc';
                 }
-                if (currentFavList.length) {
-                    currentFavList = sortFavList(currentFavList, currentSort.field, currentSort.order);
-                    renderTable();
+                if (currentImportantList.length) {
+                    currentImportantList = sortList(currentImportantList, currentSort.field, currentSort.order);
+                    applyFilterAndRender();
                     updateSortIndicators();
                 }
             });
         });
     }
 
+    // ============ 初始化 ============
     window.onload = () => {
+        loadImportantFromLocal();
+        loadHotFromLocal();
         loadImportantFunds();
-        loadFavoritesFromLocal();
-        loadFavorites();
         setupSorting();
     };
 </script>
