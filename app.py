@@ -3505,7 +3505,7 @@ def insert_or_replace_lof_history(
                         index_change = EXCLUDED.index_change,
                         heavy_change = EXCLUDED.heavy_change,
                         nav_change_pct = EXCLUDED.nav_change_pct,
-                        low = EXCLUDED.low
+                        low = COALESCE(excluded.low, low)
                 ''', (fund_code, date, close, nav_date, nav,
                     calc['jigu'], calc['jiyi'], calc['jicha'], None, None, None,
                     calc['guzhi'], calc['wucha'], calc['premium_rate_k'], premium_rate,
@@ -3573,8 +3573,21 @@ def update_low_prices(fund_code=None, days=90, use_tencent=False):
     :param days: 获取最近 days 天的数据（仅用于限定范围，实际由数据源决定）
     :param use_tencent: 强制使用腾讯接口（测试用）
     """
-    import akshare as ak
     import time
+    import logging
+    from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
+
+    @retry(stop=stop_after_attempt(5), wait=wait_fixed(2),
+           retry=retry_if_exception_type((Exception,)))
+    def fetch_akshare_low(code):
+        df = ak.fund_lof_hist_em(symbol=code)
+        if df.empty:
+            raise ValueError(f"AKShare 返回空数据: {code}")
+        rename_map = {'日期': 'date', '最低': 'low'}
+        df.rename(columns=rename_map, inplace=True)
+        df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+        return df[['date', 'low']]
+
 
     if fund_code:
         codes = [fund_code]
@@ -3639,7 +3652,7 @@ def update_low_prices(fund_code=None, days=90, use_tencent=False):
         conn.close()
         print(f"  {code}: 更新了 {updated} 条记录")
         total_updated += updated
-        time.sleep(0.5)
+        time.sleep(1)
 
     print(f"最低价数据更新完成，共更新 {total_updated} 条记录")
 
@@ -4418,14 +4431,15 @@ def do_update_all_latest():
         shares_change = record.get('份额涨幅')
 
         # 获取当日最低价
-        low_value = None
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT day_low FROM lof_funds WHERE fund_code = %s", (fund_code,))
-        row = cursor.fetchone()
-        if row and row['day_low'] is not None:
-            low_value = row['day_low']
-        conn.close()
+        if date_str == today:
+            low_value = None
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute("SELECT day_low FROM lof_funds WHERE fund_code = %s", (fund_code,))
+            row = cursor.fetchone()
+            if row and row['day_low'] is not None:
+                low_value = row['day_low']
+            conn.close()
 
         success = insert_or_replace_lof_history(
             fund_code=fund_code,
