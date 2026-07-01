@@ -885,8 +885,16 @@ def get_db(max_retries=3):
     """获取 PostgreSQL 数据库连接，支持重试"""
     database_url = os.environ.get('DATABASE_URL')
     if not database_url:
-        # 本地开发可设置 DATABASE_URL 环境变量，或 fallback 到 SQLite（但这里我们强制要求）
         raise Exception("DATABASE_URL environment variable not set")
+
+    # 如果 DATABASE_URL 中已有参数，则追加，否则添加
+    if '?' in database_url:
+        sep = '&'
+    else:
+        sep = '?'
+    # 添加连接超时和保持连接活跃的参数
+    # 注意：这些参数可能需要 PostgreSQL 支持
+    database_url += f"{sep}connect_timeout=10&keepalives=1&keepalives_idle=30&keepalives_interval=5&keepalives_count=5"
 
     for attempt in range(max_retries):
         try:
@@ -1455,8 +1463,9 @@ def fetch_merged_shares():
         if row:
             prev = row['fund_shares']
             if prev is not None and prev != 0:
-                shares_add = round(cur - prev, 2)
-                shares_change = round((shares_add / prev) * 100, 2)
+                # 强制转换为 Python float
+                shares_add = float(round(cur - prev, 2))
+                shares_change = float(round((shares_add / prev) * 100, 2))
             else:
                 shares_add = None
                 shares_change = None
@@ -4068,52 +4077,57 @@ def api_list():
 
 
 @app.route('/api/lof/history/<fund_code>')
+@app.route('/api/lof/history/<fund_code>')
 def api_history(fund_code):
     """API: 获取基金历史日线数据及所有衍生指标"""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT fund_type FROM fund_classification WHERE fund_code = %s", (fund_code,))
-    fund_type_row = cursor.fetchone()
-    fund_type = fund_type_row['fund_type'] if fund_type_row else '被动指数型'
-    cursor.execute('''
-        SELECT date, close_price, nav_date, nav, nav_change_pct,
-               jigu, jiyi, jicha, donggu, dongcha, dongyi,
-               guzhi, wucha, premium_rate_k, premium_rate,
-               volume_amount, fund_shares, shares_add, shares_change,
-               index_change, heavy_change,
-               low   -- 新增最低价
-        FROM lof_history
-        WHERE fund_code = %s
-        ORDER BY date ASC
-    ''', (fund_code,))
-    rows = cursor.fetchall()
-    conn.close()
-    result = []
-    prev_nav = None  # 用于计算最低价相对前一日净值的跌幅
-    for row in rows:
-        item = {
-            "date": row['date'], "close": row['close_price'],"low": row['low'],
-            "nav_date": row['nav_date'], "nav": row['nav'],"nav_change_pct": row['nav_change_pct'],
-            "jigu": row['jigu'], "jiyi": row['jiyi'], "jicha": row['jicha'],
-            "donggu": row['donggu'], "dongcha": row['dongcha'], "dongyi": row['dongyi'],
-            "guzhi": row['guzhi'], "wucha": row['wucha'],
-            "premium_rate_k": row['premium_rate_k'], "premium_rate": row['premium_rate'],
-            "volume": row['volume_amount'], "shares": row['fund_shares'],
-            "shares_add": row['shares_add'], "shares_change": row['shares_change'],"index_change": row['index_change'],
-        }
-        # 计算最低价相对前一日净值的跌幅
-        low_val = row['low']
-        if low_val is not None and prev_nav is not None and prev_nav != 0:
-            low_nav_change = (low_val - prev_nav) / prev_nav * 100
-        else:
-            low_nav_change = None
-        item['low_nav_change'] = low_nav_change
-        result.append(item)
-        # 更新前一日净值（仅当当前净值有效）
-        if row['nav'] is not None:
-            prev_nav = row['nav']
-        
-    return jsonify(result)
+    conn = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT fund_type FROM fund_classification WHERE fund_code = %s", (fund_code,))
+        fund_type_row = cursor.fetchone()
+        fund_type = fund_type_row['fund_type'] if fund_type_row else '被动指数型'
+        cursor.execute('''
+            SELECT date, close_price, nav_date, nav, nav_change_pct,
+                   jigu, jiyi, jicha, donggu, dongcha, dongyi,
+                   guzhi, wucha, premium_rate_k, premium_rate,
+                   volume_amount, fund_shares, shares_add, shares_change,
+                   index_change, heavy_change,
+                   low
+            FROM lof_history
+            WHERE fund_code = %s
+            ORDER BY date ASC
+        ''', (fund_code,))
+        rows = cursor.fetchall()
+        result = []
+        prev_nav = None
+        for row in rows:
+            item = {
+                "date": row['date'], "close": row['close_price'],"low": row['low'],
+                "nav_date": row['nav_date'], "nav": row['nav'],"nav_change_pct": row['nav_change_pct'],
+                "jigu": row['jigu'], "jiyi": row['jiyi'], "jicha": row['jicha'],
+                "donggu": row['donggu'], "dongcha": row['dongcha'], "dongyi": row['dongyi'],
+                "guzhi": row['guzhi'], "wucha": row['wucha'],
+                "premium_rate_k": row['premium_rate_k'], "premium_rate": row['premium_rate'],
+                "volume": row['volume_amount'], "shares": row['fund_shares'],
+                "shares_add": row['shares_add'], "shares_change": row['shares_change'],"index_change": row['index_change'],
+            }
+            low_val = row['low']
+            if low_val is not None and prev_nav is not None and prev_nav != 0:
+                low_nav_change = (low_val - prev_nav) / prev_nav * 100
+            else:
+                low_nav_change = None
+            item['low_nav_change'] = low_nav_change
+            result.append(item)
+            if row['nav'] is not None:
+                prev_nav = row['nav']
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"获取历史数据失败 {fund_code}: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 @app.route('/api/lof/detail/<fund_code>')
 def api_detail(fund_code):
@@ -4647,7 +4661,7 @@ scheduler.add_job(
     id='morning_update_all_latest'
 )
 
-# 早上 6:00 执行全量最新数据更新
+# 早上 9:15 执行全量最新数据更新
 scheduler.add_job(
     func=do_update_all_latest,
     trigger="cron",
