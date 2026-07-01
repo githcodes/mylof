@@ -16,6 +16,29 @@
         .compare-btn { background: #e67e22; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
         .compare-btn:hover { background: #d35400; }
         .update-time { font-size: 12px; color: #666; }
+
+        /* ===== 新增：搜索和筛选控件样式 ===== */
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+        .filters input, .filters select {
+            padding: 4px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 12px;
+            height: 28px;
+        }
+        .filters input[type="number"] {
+            width: 60px;
+        }
+        .filters .search-input {
+            width: 180px;
+        }
+        /* ===== 新增结束 ===== */
+
         .admin-card {
             background: #f8f9fa;
             border-radius: 12px;
@@ -118,21 +141,23 @@
 
         /* ===== 手机端优化 ===== */
         @media (max-width: 768px) {
-        body { padding: 10px; }
-        .container { padding: 10px; }
-        h1 { font-size: 20px; }
-        .admin-buttons { gap: 6px; }
-        .admin-btn { font-size: 11px; padding: 4px 8px; }
-        .toolbar { flex-direction: column; align-items: stretch; gap: 6px; }
-        .toolbar div { display: flex; gap: 6px; flex-wrap: wrap; }
-        .tab-btn { font-size: 12px; padding: 4px 10px; }
-        table { min-width: 100%; }
-        th, td { padding: 2px 3px; font-size: 10px; }
-        /* 保留所有列，不隐藏 */
-        .checkbox-col, .star-col { width: 30px; }
-        .star-btn { font-size: 14px; }
-        .update-time { font-size: 10px; }
-    }
+            body { padding: 10px; }
+            .container { padding: 10px; }
+            h1 { font-size: 20px; }
+            .admin-buttons { gap: 6px; }
+            .admin-btn { font-size: 11px; padding: 4px 8px; }
+            .toolbar { flex-direction: column; align-items: stretch; gap: 6px; }
+            .toolbar div { display: flex; gap: 6px; flex-wrap: wrap; }
+            .tab-btn { font-size: 12px; padding: 4px 10px; }
+            table { min-width: 100%; }
+            th, td { padding: 2px 3px; font-size: 10px; }
+            .checkbox-col, .star-col { width: 30px; }
+            .star-btn { font-size: 14px; }
+            .update-time { font-size: 10px; }
+            /* 新增：手机端搜索框占满 */
+            .filters .search-input { width: 100%; }
+            .filters input[type="number"] { width: 50px; }
+        }
     </style>
 </head>
 <body>
@@ -182,23 +207,33 @@
         <button class="tab-btn" data-tab="missing">📌 缺失基金</button>
     </div>
 
+    <!-- ===== 修改开始：toolbar 中增加筛选控件 ===== -->
     <div class="toolbar">
+        <div class="filters">
+            <input type="text" id="searchInput" class="search-input" placeholder="🔍 搜索 代码/名称/指数..." oninput="applyFilters()">
+            <span style="font-size:12px; color:#666;">涨幅</span>
+            <input type="number" id="minChange" placeholder="低%" style="width:50px;" oninput="applyFilters()">
+            <span style="font-size:12px; color:#666;">~</span>
+            <input type="number" id="maxChange" placeholder="高%" style="width:50px;" oninput="applyFilters()">
+            <span style="font-size:12px; color:#666;">规模 ≥</span>
+            <input type="number" id="minMarketCap" placeholder="亿" style="width:60px;" oninput="applyFilters()">
+            <span style="font-size:12px; color:#666;">亿</span>
+        </div>
         <div>
             <button class="refresh-btn" onclick="loadData()">🔄 手动刷新列表</button>
             <button class="compare-btn" onclick="compareSelected()">📊 对比选中基金</button>
         </div>
         <span class="update-time" id="updateTime"></span>
     </div>
+    <!-- ===== 修改结束 ===== -->
+
     <div class="table-wrapper">
         <table id="fundTable">
             <thead>
                 <tr>
                     <th class="checkbox-col"><input type="checkbox" id="selectAll" onchange="toggleAll()"></th>
                     <th class="star-col">⭐</th>
-                    <!-- 基金代码列保留 -->
                     <th data-col="fund_code">基金 <span class="sort-indicator"></span></th>
-                    <!-- 基金名称列（合并申购状态）
-                    <th data-col="fund_name">基金名称 <span class="sort-indicator"></span></th> -->
                     <th data-col="current_price">最新交易价 <span class="sort-indicator"></span></th>
                     <th data-col="change_percent">涨跌幅(%) <span class="sort-indicator"></span></th>
                     <th data-col="nav">最新净值 <span class="sort-indicator"></span></th>
@@ -231,6 +266,13 @@
     let sortAsc = false;
     let favoriteFunds = new Set();
     let missingFundsList = [];
+
+    // ===== 新增：搜索筛选变量 =====
+    let searchText = '';
+    let minChange = null;
+    let maxChange = null;
+    let minMarketCap = null;
+    // ===== 新增结束 =====
 
     async function loadMissingFundsList() {
         try {
@@ -326,16 +368,72 @@
         }
         return true;
     }
-    function sortAndRender() {
-        if (!sortColumn) { renderTable(filteredFunds); return; }
-        if (isColumnAllInvalid(sortColumn, filteredFunds)) {
-            renderTable(filteredFunds);
-            return;
+
+    // ===== 新增：全局筛选函数 =====
+    function applyFilters() {
+        // 读取控件值
+        const search = document.getElementById('searchInput').value.trim().toLowerCase();
+        const minChangeVal = parseFloat(document.getElementById('minChange').value);
+        const maxChangeVal = parseFloat(document.getElementById('maxChange').value);
+        const minMarketVal = parseFloat(document.getElementById('minMarketCap').value);
+        searchText = search;
+        minChange = isNaN(minChangeVal) ? null : minChangeVal;
+        maxChange = isNaN(maxChangeVal) ? null : maxChangeVal;
+        minMarketCap = isNaN(minMarketVal) ? null : minMarketVal;
+
+        // 先按标签页过滤
+        let base = filterFundsByTab(allFunds, currentTab);
+
+        // 搜索过滤（代码/名称）
+        if (searchText) {
+            base = base.filter(f => {
+                const code = (f.fund_code || '').toLowerCase();
+                const name = (f.fund_name || '').toLowerCase();
+                return code.includes(searchText) || name.includes(searchText);
+            });
         }
-        let isNum = numericColumns.includes(sortColumn);
-        let sorted = [...filteredFunds];
-        sorted.sort((a, b) => compareValues(a, b, sortColumn, isNum, sortAsc));
-        renderTable(sorted);
+
+        // 涨跌幅区间
+        if (minChange !== null) {
+            base = base.filter(f => {
+                const change = parseFloat(f.change_percent);
+                return !isNaN(change) && change >= minChange;
+            });
+        }
+        if (maxChange !== null) {
+            base = base.filter(f => {
+                const change = parseFloat(f.change_percent);
+                return !isNaN(change) && change <= maxChange;
+            });
+        }
+
+        // 规模（总市值 >= minMarketCap 亿元）
+        if (minMarketCap !== null) {
+            base = base.filter(f => {
+                const val = parseFloat(f.total_market_value);
+                if (isNaN(val)) return false;
+                const cap = val / 1e8;
+                return cap >= minMarketCap;
+            });
+        }
+
+        filteredFunds = base;
+        // 保持当前排序
+        if (sortColumn) {
+            const isNum = numericColumns.includes(sortColumn);
+            filteredFunds.sort((a, b) => compareValues(a, b, sortColumn, isNum, sortAsc));
+        }
+        renderTable(filteredFunds);
+        updateSortIndicators(null, sortColumn);
+    }
+    // ===== 新增结束 =====
+
+    // 原有的 sortAndRender 不再使用，用 applyFilters 替代，但为了兼容，保留，实际可移除
+    // 但为避免影响，我将 sortAndRender 的功能整合到 applyFilters 中。
+    // 下面保留原 sortAndRender 但不再调用（已被 applyFilters 取代）。
+    function sortAndRender() {
+        // 保留空函数或直接调用 applyFilters
+        applyFilters();
     }
 
     function renderTable(funds) {
@@ -376,7 +474,6 @@
             html += `<tr class="${rowClass}">
                 <td class="checkbox-col"><input type="checkbox" class="fund-checkbox" value="${f.fund_code}"></td>
                 <td class="star-col"><button class="star-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${f.fund_code}')">${isFav ? '★' : '☆'}</button></td>
-              
                 <td>${codeNameHtml}</td>
                 <td>${formatNumber(price, 3)}</td>
                 <td class="${changeClass}">${formatNumber(change, 2)}%</td>
@@ -401,8 +498,8 @@
 
     function switchTab(tab) {
         currentTab = tab;
-        filteredFunds = filterFundsByTab(allFunds, currentTab);
-        sortAndRender();
+        // 改为调用 applyFilters
+        applyFilters();
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.classList.toggle('active', btn.getAttribute('data-tab') === tab);
         });
@@ -416,8 +513,14 @@
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const funds = await res.json();
             allFunds = funds;
-            filteredFunds = filterFundsByTab(allFunds, currentTab);
-            sortAndRender();
+            // 清空筛选条件，并应用筛选
+            document.getElementById('searchInput').value = '';
+            document.getElementById('minChange').value = '';
+            document.getElementById('maxChange').value = '';
+            document.getElementById('minMarketCap').value = '';
+            searchText = '';
+            minChange = maxChange = minMarketCap = null;
+            applyFilters();
         } catch (err) {
             console.error('加载失败:', err);
             tbody.innerHTML = '<tr><td colspan="16">加载失败，请检查后端是否运行</td></tr>';
@@ -469,7 +572,10 @@
                     sortAsc = true;
                 }
                 updateSortIndicators(th, colField);
-                sortAndRender();
+                // 直接对 filteredFunds 排序
+                const isNum = numericColumns.includes(sortColumn);
+                filteredFunds.sort((a, b) => compareValues(a, b, sortColumn, isNum, sortAsc));
+                renderTable(filteredFunds);
             });
         });
     }
