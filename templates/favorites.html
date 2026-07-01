@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=0.3, maximum-scale=5.0, user-scalable=yes">
     <title>我的自选 - LOF看板</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -43,6 +43,31 @@
         .important-fund a:hover {
             text-decoration: underline;
         }
+
+        /* ===== 手机端优化 ===== */
+        @media (max-width: 768px) {
+            body { padding: 8px; }
+            .container { padding: 8px; }
+            h1 { font-size: 20px; margin-bottom: 10px; }
+            .toolbar { flex-direction: column; align-items: stretch; gap: 6px; }
+            .toolbar div { display: flex; gap: 6px; flex-wrap: wrap; }
+            .refresh-btn, .back-link { font-size: 12px; padding: 6px 12px; }
+            .update-time { font-size: 10px; }
+            th, td { padding: 3px 4px; font-size: 10px; }
+            th { font-size: 10px; }
+            .star-btn { font-size: 14px; }
+            .star-col { width: 30px; }
+            /* 保留所有列，表格可横向滚动 */
+            table { min-width: 1000px; }
+        }
+        @media (max-width: 480px) {
+            .container { padding: 4px; }
+            .refresh-btn, .back-link { font-size: 11px; padding: 4px 8px; }
+            th, td { padding: 2px 3px; font-size: 9px; }
+            .star-btn { font-size: 12px; }
+            .star-col { width: 24px; }
+            table { min-width: 800px; }
+        }
     </style>
 </head>
 <body>
@@ -71,7 +96,6 @@
                     <th data-sort="premium_rate">溢价率(%) <span class="sort-indicator"></span></th>
                     <th data-sort="estimated_premium_rate">估算溢价率(%) <span class="sort-indicator"></span></th>
                     <th data-sort="daily_purchase_limit">日申购限额 <span class="sort-indicator"></span></th>
-                  <!--  <th data-sort="purchase_status">申购状态 <span class="sort-indicator"></span></th>-->
                     <th data-sort="shares_add">份额新增<br>(万份)</br> <span class="sort-indicator"></span></th>
                     <th data-sort="total_market_value">总市值 <span class="sort-indicator"></span></th>
                     <th data-sort="volume_hands">成交量(手) <span class="sort-indicator"></span></th>
@@ -80,7 +104,7 @@
                 </tr>
             </thead>
             <tbody id="favTableBody">
-                <tr><td colspan="16" style="text-align:center;">加载中...<\/td><\/tr>
+                <tr><td colspan="16" style="text-align:center;">加载中...</td></tr>
             </tbody>
         </table>
     </div>
@@ -89,10 +113,10 @@
 <script>
     let favoriteFunds = new Set();
     const STORAGE_KEY = 'lof_favorites';
-    const IMPORTANT_STORAGE_KEY = 'lof_important_funds';  // 存储重点基金代码
-    let importantFunds = new Set();      // 重点关注的基金代码集合
-    let currentFavList = [];             // 存储当前自选基金列表（排序后的）
-    let currentSort = { field: 'fund_code', order: 'asc' };   // 当前排序字段和顺序
+    const IMPORTANT_STORAGE_KEY = 'lof_important_funds';
+    let importantFunds = new Set();
+    let currentFavList = [];
+    let currentSort = { field: 'fund_code', order: 'asc' };
 
     // ---------- 重点基金管理 ----------
     function loadImportantFunds() {
@@ -120,10 +144,9 @@
             showToast(`已标记为重点基金 ${fundCode}`);
         }
         saveImportantFunds();
-        renderTable(); // 刷新显示
+        renderTable();
     }
     function toggleAllImportant() {
-        // 将所有当前自选基金全部标记为重点（或取消全部？这里实现切换：如果有任意基金未重点，则全部标记为重点；如果全部已是重点，则全部取消）
         const allMarked = currentFavList.every(f => importantFunds.has(f.fund_code));
         if (allMarked) {
             importantFunds.clear();
@@ -157,7 +180,7 @@
             favoriteFunds.add(fundCode);
         }
         saveFavorites();
-        loadFavorites(); // 重新加载自选列表
+        loadFavorites();
     }
 
     // ---------- 辅助函数 ----------
@@ -175,7 +198,6 @@
         return num.toFixed(digits) + '%';
     }
     function showToast(msg, isError = false) {
-        // 简单实现 toast，如果页面中没有toast元素，可以创建临时弹窗
         let toast = document.getElementById('toast');
         if (!toast) {
             toast = document.createElement('div');
@@ -288,7 +310,7 @@
     function renderTable() {
         const tbody = document.getElementById('favTableBody');
         if (!currentFavList.length) {
-            tbody.innerHTML = `<tr><td colspan="16" class="no-favorites">暂无自选基金，请回到<a href="/">首页</a>点击⭐添加<\/td><\/tr>`;
+            tbody.innerHTML = `<tr><td colspan="16" class="no-favorites">暂无自选基金，请回到<a href="/">首页</a>点击⭐添加</td></tr>`;
             document.getElementById('updateTime').innerHTML = '';
             return;
         }
@@ -304,13 +326,11 @@
             let changeClass = (change !== null && change >= 0) ? 'positive' : 'negative';
             let premiumClass = (premium !== null && premium >= 0) ? 'positive' : 'negative';
             let estPremClass = (estPrem !== null && estPrem >= 0) ? 'positive' : 'negative';
-            let statusBg = (f.purchase_status && f.purchase_status !== '暂停申购') ? 'status-not-suspended' : '';
             const isFav = favoriteFunds.has(f.fund_code);
             const isImp = isImportant(f.fund_code);
             const codeClass = isImp ? 'important-fund' : '';
             const nameClass = isImp ? 'important-fund' : '';
 
-             // 构建基金名称列（包含暂停状态）
             let nameHtml = `<a href="/fund/${f.fund_code}" class="fund-link ${nameClass}" target="_blank">${f.fund_name || '-'}</a>`;
             if (f.purchase_status && f.purchase_status.includes('暂停')) {
                 nameHtml += `<span style="background-color: #ffeb3b; padding: 0 4px; border-radius: 2px; font-weight:bold;">暂停</span>`;
@@ -318,7 +338,7 @@
             html += `<tr>
                 <td class="star-col"><button class="star-btn" onclick="toggleFavorite('${f.fund_code}')">${isFav ? '★' : '☆'}</button> <button class="star-btn" style="color:#e67e22; font-size:14px;" onclick="toggleImportant('${f.fund_code}')">${isImp ? '❤️' : '♡'}</button></td>
                 <td><a href="/fund/${f.fund_code}" class="fund-link ${codeClass}" target="_blank">${f.fund_code || '-'}</a></td>
-                 <td>${nameHtml}</td>
+                <td>${nameHtml}</td>
                 <td>${formatNumber(price, 3)}</td>
                 <td class="${changeClass}">${formatPercent(change, 2)}</td>
                 <td>${formatNumber(nav, 4)}</td>
@@ -327,13 +347,12 @@
                 <td class="${premiumClass}">${formatPercent(premium, 2)}</td>
                 <td class="${estPremClass}">${formatPercent(estPrem, 2)}</td>
                 <td>${f.daily_limit_display}</td>
-               <!-- <td class="${statusBg}">${f.purchase_status || '-'}</td> -->
-               <td>${formatNumber(safeNumber(f.shares_add), 2)}</td>
+                <td>${formatNumber(safeNumber(f.shares_add), 2)}</td>
                 <td>${f.total_mv_display}</td>
                 <td>${formatNumber(volHands, 0)}</td>
                 <td>${f.volume_amount_display}</td>
                 <td><a href="/fund/${f.fund_code}" class="fund-link" target="_blank">详情</a></td>
-            </table>`;
+            </tr>`;
         }
         tbody.innerHTML = html;
         if (currentFavList.length && currentFavList[0]?.updated_at) {
@@ -343,7 +362,7 @@
 
     async function loadFavorites() {
         const tbody = document.getElementById('favTableBody');
-        tbody.innerHTML = '<td><td colspan="16" style="text-align:center;">加载中...<\/td><\/tr>';
+        tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;">加载中...</td></tr>';
         try {
             const res = await fetch('/api/lof/list');
             if (!res.ok) throw new Error('获取数据失败');
@@ -359,13 +378,12 @@
             updateSortIndicators();
         } catch (err) {
             console.error('加载失败:', err);
-            tbody.innerHTML = '<tr><td colspan="16">加载失败，请检查网络<\/td><\/tr>';
+            tbody.innerHTML = '<tr><td colspan="16">加载失败，请检查网络</td></tr>';
         }
     }
 
     function setupSorting() {
-        const ths = document.querySelectorAll('#favTable th[data-sort]');
-        ths.forEach(th => {
+        document.querySelectorAll('#favTable th[data-sort]').forEach(th => {
             th.addEventListener('click', () => {
                 const field = th.getAttribute('data-sort');
                 if (currentSort.field === field) {
