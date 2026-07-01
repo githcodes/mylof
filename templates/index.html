@@ -376,7 +376,7 @@
             html += `<tr class="${rowClass}">
                 <td class="checkbox-col"><input type="checkbox" class="fund-checkbox" value="${f.fund_code}"></td>
                 <td class="star-col"><button class="star-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${f.fund_code}')">${isFav ? '★' : '☆'}</button></td>
-              //  <td><a href="/fund/${f.fund_code}" class="fund-link" target="_blank">${f.fund_code || '-'}</a></td>
+              
                 <td>${codeNameHtml}</td>
                 <td>${formatNumber(price, 3)}</td>
                 <td class="${changeClass}">${formatNumber(change, 2)}%</td>
