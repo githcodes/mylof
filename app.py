@@ -3575,19 +3575,26 @@ def update_low_prices(fund_code=None, days=90, use_tencent=False):
     """
     import time
     import logging
-    from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
-
-    @retry(stop=stop_after_attempt(5), wait=wait_fixed(2),
-           retry=retry_if_exception_type((Exception,)))
-    def fetch_akshare_low(code):
-        df = ak.fund_lof_hist_em(symbol=code)
-        if df.empty:
-            raise ValueError(f"AKShare 返回空数据: {code}")
-        rename_map = {'日期': 'date', '最低': 'low'}
-        df.rename(columns=rename_map, inplace=True)
-        df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
-        return df[['date', 'low']]
-
+    
+    # 手动重试函数（替代 tenacity）
+    def fetch_akshare_with_retry(code, max_retries=3, delay=2):
+        """带重试的 AKShare 数据获取"""
+        for attempt in range(max_retries):
+            try:
+                df = ak.fund_lof_hist_em(symbol=code)
+                if df.empty:
+                    print(f"  {code}: AKShare 返回空数据 (尝试 {attempt+1}/{max_retries})")
+                    raise ValueError("空数据")
+                rename_map = {'日期': 'date', '最低': 'low'}
+                df.rename(columns=rename_map, inplace=True)
+                df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+                return df[['date', 'low']]
+            except Exception as e:
+                print(f"  {code}: AKShare 尝试 {attempt+1}/{max_retries} 失败: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(delay)
+                else:
+                    raise  # 最后一次失败，抛出异常
 
     if fund_code:
         codes = [fund_code]
@@ -3606,24 +3613,12 @@ def update_low_prices(fund_code=None, days=90, use_tencent=False):
             if use_tencent:
                 raise Exception("强制使用腾讯接口")  # 跳过 AKShare
 
-            df = ak.fund_lof_hist_em(symbol=code)
+            # 使用重试函数获取数据
+            df = fetch_akshare_with_retry(code)
+            
             if df.empty:
                 print(f"  {code}: AKShare 无数据，尝试腾讯备选...")
                 df = get_tencent_history_low(code)
-            else:
-                # 重命名列
-                rename_map = {
-                    '日期': 'date',
-                    '最低': 'low',
-                    '收盘': 'close',
-                    '开盘': 'open',
-                    '最高': 'high',
-                    '成交量': 'volume',
-                    '成交额': 'amount'
-                }
-                df.rename(columns=rename_map, inplace=True)
-                df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
-                df = df[['date', 'low']]
 
         except Exception as e:
             print(f"  {code}: AKShare 失败 ({e})，尝试腾讯备选...")
@@ -3655,6 +3650,7 @@ def update_low_prices(fund_code=None, days=90, use_tencent=False):
         time.sleep(1)
 
     print(f"最低价数据更新完成，共更新 {total_updated} 条记录")
+
 
 def backfill_yesterday_nav_for_missing_funds():
     """
