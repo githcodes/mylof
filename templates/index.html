@@ -180,6 +180,20 @@
             }
         }
 
+        /* 合并列：居中显示 */
+        .merged-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.4;
+        }
+        .merged-cell .value {
+            font-weight: bold;
+        }
+        .merged-cell .sub {
+            font-size: 0.9em;
+        }
         
     </style>
 </head>
@@ -478,16 +492,16 @@
             codeNameHtml += `</span></div>`;
 
             // 价格/涨跌幅 合并列（上下排列，居中）
-            let priceChangeHtml = `<div style="display:flex; flex-direction:column; align-items:center; line-height:1.4;">
-                <span>${formatNumber(price, 3)}</span>
-                <span class="${changeClass}">${formatNumber(change, 2)}%</span>
+            let priceChangeHtml = `<div class="merged-cell">
+                <div class="value">${formatNumber(price, 3)}</div>
+                <div class="sub ${changeClass}">${formatNumber(change, 2)}%</div>
             </div>`;
 
             // 净值/日期 合并列（上下排列，居中）
             // 净值/日期 合并列（日期在上，净值在下，居中）
-            let navDateHtml = `<div style="display:flex; flex-direction:column; align-items:center; line-height:1.4;">
-                <span style="font-size:10px; color:#888;">${f.nav_date || '-'}</span>
-                <span>${formatNumber(nav, 4)}</span>
+            let navDateHtml = `<div class="merged-cell">">
+                <div class="value">${f.nav_date || '-'}</div>
+                <div class="sub" style="font-weight:bold; color:#000;">${formatNumber(nav, 4)}</div>
             </div>`;
 
             html += `<tr class="${rowClass}">
