@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=0.3, maximum-scale=5.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>我的自选 - LOF看板</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -16,7 +16,7 @@
         .back-link:hover { background: #2c3e50; }
         .update-time { font-size: 12px; color: #666; }
         .table-wrapper { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; min-width: 1200px; }
+        table { width: 100%; border-collapse: collapse; min-width: 1100px; }
         th, td { padding: 6px 5px; text-align: left; border-bottom: 1px solid #ddd; white-space: nowrap; font-size: 12px; }
         th { background: #2c3e50; color: white; position: sticky; top: 0; cursor: pointer; user-select: none; }
         th:hover { background: #1e2b38; }
@@ -30,8 +30,6 @@
         .no-favorites { text-align: center; padding: 40px; font-size: 16px; color: #666; }
         .star-col { width: 40px; text-align: center; }
         .star-btn { background: none; border: none; font-size: 16px; cursor: pointer; color: #f1c40f; }
-        /* 重点基金样式 */
-        /* 重点基金样式 */
         .important-fund,
         .important-fund a,
         .fund-link.important-fund,
@@ -43,31 +41,18 @@
         .fund-link.important-fund a:hover {
             text-decoration: underline;
         }
-        
-
-        /* ===== 手机端优化 ===== */
         @media (max-width: 768px) {
             body { padding: 8px; }
-            .container { padding: 8px; }
-            h1 { font-size: 20px; margin-bottom: 10px; }
-            .toolbar { flex-direction: column; align-items: stretch; gap: 6px; }
-            .toolbar div { display: flex; gap: 6px; flex-wrap: wrap; }
-            .refresh-btn, .back-link { font-size: 12px; padding: 6px 12px; }
-            .update-time { font-size: 10px; }
-            th, td { padding: 3px 4px; font-size: 10px; }
-            th { font-size: 10px; }
-            .star-btn { font-size: 14px; }
-            .star-col { width: 30px; }
-            /* 保留所有列，表格可横向滚动 */
-            table { min-width: 1000px; }
-        }
-        @media (max-width: 480px) {
-            .container { padding: 4px; }
-            .refresh-btn, .back-link { font-size: 11px; padding: 4px 8px; }
-            th, td { padding: 2px 3px; font-size: 9px; }
-            .star-btn { font-size: 12px; }
-            .star-col { width: 24px; }
-            table { min-width: 800px; }
+            .container { padding: 10px; }
+            th, td { font-size: 10px; padding: 2px 3px; }
+            .toolbar { flex-direction: column; align-items: stretch; }
+            .toolbar div { display: flex; flex-wrap: wrap; gap: 6px; }
+            .back-link, .refresh-btn { font-size: 12px; padding: 4px 8px; }
+            table { min-width: 100%; }
+            th:nth-child(9), td:nth-child(9) { display: none; }
+            th:nth-child(10), td:nth-child(10) { display: none; }
+            th:nth-child(12), td:nth-child(12) { display: none; }
+            th:nth-child(14), td:nth-child(14) { display: none; }
         }
     </style>
 </head>
@@ -77,9 +62,9 @@
     <div class="toolbar">
         <div>
             <a href="/" class="back-link">← 返回首页</a>
+            <a href="/important" class="back-link" style="background:#e67e22;">❤️ 重点</a>
             <button class="refresh-btn" onclick="loadFavorites()">🔄 刷新自选</button>
             <button class="refresh-btn" style="background:#e67e22;" onclick="toggleAllImportant()">⭐ 切换所有重要标记</button>
-            <a href="/important" class="back-link" style="background:#e67e22;">❤️ 查看重点</a>
         </div>
         <span class="update-time" id="updateTime"></span>
     </div>
@@ -88,17 +73,14 @@
             <thead>
                 <tr>
                     <th class="star-col">⭐</th>
-                    <th data-sort="fund_code">基金代码 <span class="sort-indicator"></span></th>
-        
-                    <th data-sort="current_price">最新交易价 <span class="sort-indicator"></span></th>
-                    <th data-sort="change_percent">涨跌幅(%) <span class="sort-indicator"></span></th>
-                    <th data-sort="nav">最新净值 <span class="sort-indicator"></span></th>
-                    <th data-sort="nav_date">净值日期 <span class="sort-indicator"></span></th>
+                    <th data-sort="fund_code">基金代码/名称 <span class="sort-indicator"></span></th>
+                    <th data-sort="price_change" style="text-align:center;">价格/涨跌幅 <span class="sort-indicator"></span></th>
+                    <th data-sort="nav_date" style="text-align:center;">净值/日期 <span class="sort-indicator"></span></th>
                     <th data-sort="estimated_nav">估算净值 <span class="sort-indicator"></span></th>
                     <th data-sort="premium_rate">溢价率(%) <span class="sort-indicator"></span></th>
                     <th data-sort="estimated_premium_rate">估算溢价率(%) <span class="sort-indicator"></span></th>
                     <th data-sort="daily_purchase_limit">日申购限额 <span class="sort-indicator"></span></th>
-                    <th data-sort="shares_add">份额新增<br>(万份)</br> <span class="sort-indicator"></span></th>
+                    <th data-sort="shares_add">份额新增<br>(万份) <span class="sort-indicator"></span></th>
                     <th data-sort="total_market_value">总市值 <span class="sort-indicator"></span></th>
                     <th data-sort="volume_hands">成交量(手) <span class="sort-indicator"></span></th>
                     <th data-sort="volume_amount">成交额 <span class="sort-indicator"></span></th>
@@ -106,7 +88,7 @@
                 </tr>
             </thead>
             <tbody id="favTableBody">
-                <tr><td colspan="16" style="text-align:center;">加载中...</td></tr>
+                <tr><td colspan="13" style="text-align:center;">加载中...</td></tr>
             </tbody>
         </table>
     </div>
@@ -131,8 +113,7 @@
         }
     }
     function saveImportantFunds() {
-        const arr = Array.from(importantFunds);
-        localStorage.setItem(IMPORTANT_STORAGE_KEY, JSON.stringify(arr));
+        localStorage.setItem(IMPORTANT_STORAGE_KEY, JSON.stringify(Array.from(importantFunds)));
     }
     function isImportant(fundCode) {
         return importantFunds.has(fundCode);
@@ -172,8 +153,7 @@
         }
     }
     function saveFavorites() {
-        const arr = Array.from(favoriteFunds);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(favoriteFunds)));
     }
     function toggleFavorite(fundCode) {
         if (favoriteFunds.has(fundCode)) {
@@ -219,33 +199,29 @@
         toast.style.backgroundColor = isError ? '#c0392b' : '#2c3e50';
         toast.textContent = msg;
         toast.style.opacity = '1';
-        setTimeout(() => {
-            toast.style.opacity = '0';
-        }, 3000);
+        setTimeout(() => { toast.style.opacity = '0'; }, 3000);
     }
 
-    // ---------- 排序函数 ----------
+    // ---------- 排序 ----------
     function sortFavList(list, field, order) {
         return [...list].sort((a, b) => {
             let aVal, bVal;
             switch (field) {
                 case 'fund_code':
+                    aVal = a.fund_code || '';
+                    bVal = b.fund_code || '';
+                    if (order === 'asc') return aVal.localeCompare(bVal);
+                    else return bVal.localeCompare(aVal);
                 case 'fund_name':
-                case 'nav_date':
-                case 'purchase_status':
-                    aVal = a[field] || '';
-                    bVal = b[field] || '';
+                    aVal = a.fund_name || '';
+                    bVal = b.fund_name || '';
                     if (order === 'asc') return aVal.localeCompare(bVal, 'zh');
                     else return bVal.localeCompare(aVal, 'zh');
-                case 'current_price':
+                case 'price_change': // 按价格排序（用 current_price）
                     aVal = safeNumber(a.current_price) ?? -Infinity;
                     bVal = safeNumber(b.current_price) ?? -Infinity;
                     break;
-                case 'change_percent':
-                    aVal = safeNumber(a.change_percent) ?? -Infinity;
-                    bVal = safeNumber(b.change_percent) ?? -Infinity;
-                    break;
-                case 'nav':
+                case 'nav_date': // 按净值排序（用 nav）
                     aVal = safeNumber(a.nav) ?? -Infinity;
                     bVal = safeNumber(b.nav) ?? -Infinity;
                     break;
@@ -286,13 +262,11 @@
                     bVal = b[field] ?? '';
             }
             if (typeof aVal === 'number' && typeof bVal === 'number') {
-                if (order === 'asc') return aVal - bVal;
-                else return bVal - aVal;
+                return order === 'asc' ? aVal - bVal : bVal - aVal;
             } else {
                 const aStr = String(aVal);
                 const bStr = String(bVal);
-                if (order === 'asc') return aStr.localeCompare(bStr);
-                else return bStr.localeCompare(aStr);
+                return order === 'asc' ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
             }
         });
     }
@@ -312,7 +286,7 @@
     function renderTable() {
         const tbody = document.getElementById('favTableBody');
         if (!currentFavList.length) {
-            tbody.innerHTML = `<tr><td colspan="15" class="no-favorites">暂无自选基金，请回到<a href="/">首页</a>点击⭐添加</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="13" class="no-favorites">暂无自选基金，请回到<a href="/">首页</a>点击⭐添加</td></tr>`;
             document.getElementById('updateTime').innerHTML = '';
             return;
         }
@@ -330,35 +304,39 @@
             let estPremClass = (estPrem !== null && estPrem >= 0) ? 'positive' : 'negative';
             const isFav = favoriteFunds.has(f.fund_code);
             const isImp = isImportant(f.fund_code);
-        
-            
-            // 构建基金名称列（包含暂停状态）
-            // 在循环内，已经定义了 const isImp = isImportant(f.fund_code);
-            // 添加红色样式变量
-            const redStyle = isImp ? 'color:#e74c3c !important; font-weight:bold;' : '';
+            const codeClass = isImp ? 'important-fund' : '';
+            const nameClass = isImp ? 'important-fund' : '';
 
-            // 构建基金名称/代码合并列（名称在上，代码在下，符合你的要求）
+            // 基金代码/名称
             let codeNameHtml = `<div style="display:flex; flex-direction:column; line-height:1.5;">
-                <a href="/fund/${f.fund_code}" class="fund-link" target="_blank" style="font-weight:bold; ${redStyle}">${f.fund_name || '-'}</a>
+                <a href="/fund/${f.fund_code}" class="fund-link ${codeClass}" target="_blank" style="font-weight:bold;">${f.fund_code || '-'}</a>
                 <span>`;
-            codeNameHtml += `<a href="/fund/${f.fund_code}" class="fund-link" target="_blank" style="${redStyle}">${f.fund_code || '-'}</a>`;
+            codeNameHtml += `<a href="/fund/${f.fund_code}" class="fund-link ${nameClass}" target="_blank">${f.fund_name || '-'}</a>`;
             if (f.purchase_status && f.purchase_status.includes('暂停')) {
                 codeNameHtml += ` <span style="background-color: #ffeb3b; padding: 0 4px; border-radius: 2px; font-weight:bold;">暂停</span>`;
             }
             codeNameHtml += `</span></div>`;
 
-            
-    
+            // 价格/涨跌幅
+            let priceChangeHtml = `<div style="display:flex; flex-direction:column; align-items:center; line-height:1.4;">
+                <span>${formatNumber(price, 3)}</span>
+                <span class="${changeClass}">${formatPercent(change, 2)}</span>
+            </div>`;
+
+            // 净值/日期（日期在上，净值在下）
+            let navDateHtml = `<div style="display:flex; flex-direction:column; align-items:center; line-height:1.4;">
+                <span style="font-size:10px; color:#888;">${f.nav_date || '-'}</span>
+                <span>${formatNumber(nav, 4)}</span>
+            </div>`;
+
             html += `<tr>
                 <td class="star-col">
                     <button class="star-btn" onclick="toggleFavorite('${f.fund_code}')">${isFav ? '★' : '☆'}</button>
                     <button class="star-btn" style="color:#e67e22; font-size:14px;" onclick="toggleImportant('${f.fund_code}')">${isImp ? '❤️' : '♡'}</button>
                 </td>
                 <td>${codeNameHtml}</td>
-                <td>${formatNumber(price, 3)}</td>
-                <td class="${changeClass}">${formatPercent(change, 2)}</td>
-                <td>${formatNumber(nav, 4)}</td>
-                <td>${f.nav_date || '-'}</td>
+                <td style="text-align:center;">${priceChangeHtml}</td>
+                <td style="text-align:center;">${navDateHtml}</td>
                 <td>${formatNumber(estNav, 4)}</td>
                 <td class="${premiumClass}">${formatPercent(premium, 2)}</td>
                 <td class="${estPremClass}">${formatPercent(estPrem, 2)}</td>
@@ -376,10 +354,9 @@
         }
     }
 
-
     async function loadFavorites() {
         const tbody = document.getElementById('favTableBody');
-        tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;">加载中...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;">加载中...</td></tr>';
         try {
             const res = await fetch('/api/lof/list');
             if (!res.ok) throw new Error('获取数据失败');
@@ -395,7 +372,7 @@
             updateSortIndicators();
         } catch (err) {
             console.error('加载失败:', err);
-            tbody.innerHTML = '<tr><td colspan="16">加载失败，请检查网络</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="13">加载失败，请检查网络</td></tr>';
         }
     }
 

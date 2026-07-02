@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=0.3, maximum-scale=5.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>重点基金 - LOF看板</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -31,20 +31,19 @@
         .star-btn { background: none; border: none; font-size: 16px; cursor: pointer; color: #ccc; transition: color 0.2s; }
         .star-btn.active { color: #f1c40f; }
         .star-btn:hover { color: #f39c12; }
-        /* 强烈关注基金红色文字（新增） */
-        .hot-red-text {
+
+        .important-fund {
             color: #e74c3c !important;
             font-weight: bold !important;
         }
-        .hot-red-text a {
+        .important-fund a {
             color: #e74c3c !important;
             font-weight: bold !important;
             text-decoration: none;
         }
-        .hot-red-text a:hover {
+        .important-fund a:hover {
             text-decoration: underline;
         }
-        /* 强烈关注背景 */
         .hot-fund {
             background-color: #fff3e0 !important;
             border-left: 4px solid #e67e22 !important;
@@ -52,7 +51,9 @@
         .hot-fund:hover {
             background-color: #ffe0b3 !important;
         }
-        /* 标记按钮组 */
+        .hot-fund a {
+            font-weight: bold !important;
+        }
         .mark-btns {
             display: flex;
             gap: 2px;
@@ -71,16 +72,10 @@
             opacity: 1;
             transform: scale(1.1);
         }
-        .mark-btn.hot-active {
-            color: #e67e22;
-        }
-        .mark-btn.important-active {
-            color: #e74c3c;
-        }
-        .mark-btn.fav-active {
-            color: #f1c40f;
-        }
-        /* 筛选标签 */
+        .mark-btn.hot-active { color: #e67e22; }
+        .mark-btn.important-active { color: #e74c3c; }
+        .mark-btn.fav-active { color: #f1c40f; }
+
         .filter-tags {
             display: flex;
             gap: 8px;
@@ -100,10 +95,8 @@
             border-color: #3498db;
             background: #e3f0ff;
         }
-        .filter-tag:hover {
-            background: #e0e0e0;
-        }
-        /* 手机端适配 */
+        .filter-tag:hover { background: #e0e0e0; }
+
         @media (max-width: 768px) {
             body { padding: 8px; }
             .container { padding: 10px; }
@@ -124,7 +117,6 @@
 <div class="container">
     <h1>❤️🔥 重点 & 强烈关注</h1>
     
-    <!-- 筛选标签 -->
     <div class="filter-tags">
         <span class="filter-tag active" data-filter="all" onclick="setFilter('all')">📋 全部</span>
         <span class="filter-tag" data-filter="important" onclick="setFilter('important')">❤️ 重点</span>
@@ -146,10 +138,8 @@
                 <tr>
                     <th class="star-col">标记</th>
                     <th data-sort="fund_code">基金代码/名称 <span class="sort-indicator"></span></th>
-                    <th data-sort="current_price">最新交易价 <span class="sort-indicator"></span></th>
-                    <th data-sort="change_percent">涨跌幅(%) <span class="sort-indicator"></span></th>
-                    <th data-sort="nav">最新净值 <span class="sort-indicator"></span></th>
-                    <th data-sort="nav_date">净值日期 <span class="sort-indicator"></span></th>
+                    <th data-sort="price_change" style="text-align:center;">价格/涨跌幅 <span class="sort-indicator"></span></th>
+                    <th data-sort="nav_date" style="text-align:center;">日期/净值<span class="sort-indicator"></span></th>
                     <th data-sort="estimated_nav">估算净值 <span class="sort-indicator"></span></th>
                     <th data-sort="premium_rate">溢价率(%) <span class="sort-indicator"></span></th>
                     <th data-sort="estimated_premium_rate">估算溢价率(%) <span class="sort-indicator"></span></th>
@@ -162,26 +152,24 @@
                 </tr>
             </thead>
             <tbody id="importantTableBody">
-                <tr><td colspan="15" style="text-align:center;">加载中...</td></tr>
+                <tr><td colspan="13" style="text-align:center;">加载中...</td></tr>
             </tbody>
         </table>
     </div>
 </div>
 
 <script>
-    // ============ 存储键 ============
     const IMPORTANT_STORAGE_KEY = 'lof_important_funds';
     const HOT_STORAGE_KEY = 'lof_hot_funds';
     const FAVORITE_STORAGE_KEY = 'lof_favorites';
 
-    // ============ 数据 ============
     let importantFunds = new Set();
     let hotFunds = new Set();
     let currentImportantList = [];
     let currentSort = { field: 'fund_code', order: 'asc' };
     let currentFilter = 'all';
 
-    // ============ 存储操作 ============
+    // ---------- 存储 ----------
     function loadImportantFromLocal() {
         const stored = localStorage.getItem(IMPORTANT_STORAGE_KEY);
         if (stored) try { importantFunds = new Set(JSON.parse(stored)); } catch(e) {}
@@ -207,7 +195,7 @@
         localStorage.setItem(FAVORITE_STORAGE_KEY, JSON.stringify(Array.from(favs)));
     }
 
-    // ============ 切换标记 ============
+    // ---------- 切换标记 ----------
     function toggleImportant(fundCode) {
         if (importantFunds.has(fundCode)) {
             importantFunds.delete(fundCode);
@@ -219,7 +207,6 @@
         saveImportantToLocal();
         loadImportantFunds();
     }
-
     function toggleHot(fundCode) {
         if (hotFunds.has(fundCode)) {
             hotFunds.delete(fundCode);
@@ -231,7 +218,6 @@
         saveHotToLocal();
         loadImportantFunds();
     }
-
     function toggleFavorite(fundCode) {
         const favs = loadFavoritesFromLocal();
         if (favs.has(fundCode)) {
@@ -242,18 +228,11 @@
         saveFavoritesToLocal(favs);
         loadImportantFunds();
     }
+    function isFavorite(fundCode) { return loadFavoritesFromLocal().has(fundCode); }
+    function isImportant(fundCode) { return importantFunds.has(fundCode); }
+    function isHot(fundCode) { return hotFunds.has(fundCode); }
 
-    function isFavorite(fundCode) {
-        return loadFavoritesFromLocal().has(fundCode);
-    }
-    function isImportant(fundCode) {
-        return importantFunds.has(fundCode);
-    }
-    function isHot(fundCode) {
-        return hotFunds.has(fundCode);
-    }
-
-    // ============ 过滤 ============
+    // ---------- 过滤 ----------
     function setFilter(type) {
         currentFilter = type;
         document.querySelectorAll('.filter-tag').forEach(tag => {
@@ -261,7 +240,6 @@
         });
         applyFilterAndRender();
     }
-
     function applyFilterAndRender() {
         let filtered = currentImportantList;
         if (currentFilter === 'important') {
@@ -274,7 +252,7 @@
         renderTable(filtered);
     }
 
-    // ============ 辅助函数 ============
+    // ---------- 辅助 ----------
     function safeNumber(val) {
         if (val === null || val === undefined || val === '-') return null;
         let num = parseFloat(val);
@@ -311,7 +289,7 @@
         setTimeout(() => { toast.style.opacity = '0'; }, 2500);
     }
 
-    // ============ 排序 ============
+    // ---------- 排序 ----------
     function sortList(list, field, order) {
         return [...list].sort((a, b) => {
             let aVal, bVal;
@@ -326,15 +304,11 @@
                     bVal = b.fund_name || '';
                     if (order === 'asc') return aVal.localeCompare(bVal, 'zh');
                     else return bVal.localeCompare(aVal, 'zh');
-                case 'current_price':
+                case 'price_change':
                     aVal = safeNumber(a.current_price) ?? -Infinity;
                     bVal = safeNumber(b.current_price) ?? -Infinity;
                     break;
-                case 'change_percent':
-                    aVal = safeNumber(a.change_percent) ?? -Infinity;
-                    bVal = safeNumber(b.change_percent) ?? -Infinity;
-                    break;
-                case 'nav':
+                case 'nav_date':
                     aVal = safeNumber(a.nav) ?? -Infinity;
                     bVal = safeNumber(b.nav) ?? -Infinity;
                     break;
@@ -396,11 +370,11 @@
         });
     }
 
-    // ============ 渲染 ============
+    // ---------- 渲染 ----------
     function renderTable(funds) {
         const tbody = document.getElementById('importantTableBody');
         if (!funds.length) {
-            tbody.innerHTML = `<tr><td colspan="15" class="no-data">暂无符合条件的基金</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="13" class="no-data">暂无符合条件的基金</td></tr>`;
             document.getElementById('updateTime').innerHTML = '';
             return;
         }
@@ -409,8 +383,7 @@
             const isFav = isFavorite(f.fund_code);
             const isImp = isImportant(f.fund_code);
             const isHotFlag = isHot(f.fund_code);
-            // 只有强烈关注（🔥）的基金才显示红色文字
-            const redStyle = isHotFlag ? 'color:#e74c3c !important; font-weight:bold;' : '';
+            const redStyle = isImp ? 'color:#e74c3c !important; font-weight:bold;' : '';
             const rowClass = isHotFlag ? 'hot-fund' : '';
             const impActive = isImp ? 'active important-active' : '';
             const hotActive = isHotFlag ? 'active hot-active' : '';
@@ -427,7 +400,7 @@
             let premiumClass = (premium !== null && premium >= 0) ? 'positive' : 'negative';
             let estPremClass = (estPrem !== null && estPrem >= 0) ? 'positive' : 'negative';
 
-            // 构建基金代码/名称
+            // 基金代码/名称
             let codeNameHtml = `<div style="display:flex; flex-direction:column; line-height:1.5;">
                 <a href="/fund/${f.fund_code}" class="fund-link" target="_blank" style="font-weight:bold; ${redStyle}">${f.fund_name || '-'}</a>
                 <span>`;
@@ -436,6 +409,18 @@
                 codeNameHtml += ` <span style="background-color: #ffeb3b; padding: 0 4px; border-radius: 2px; font-weight:bold;">暂停</span>`;
             }
             codeNameHtml += `</span></div>`;
+
+            // 价格/涨跌幅
+            let priceChangeHtml = `<div style="display:flex; flex-direction:column; align-items:center; line-height:1.4;">
+                <span>${formatNumber(price, 3)}</span>
+                <span class="${changeClass}">${formatPercent(change, 2)}</span>
+            </div>`;
+
+            // 净值/日期（日期在上，净值在下）
+            let navDateHtml = `<div style="display:flex; flex-direction:column; align-items:center; line-height:1.4;">
+                <span style="font-size:10px; color:#888;">${f.nav_date || '-'}</span>
+                <span>${formatNumber(nav, 4)}</span>
+            </div>`;
 
             html += `<tr class="${rowClass}">
                 <td class="star-col">
@@ -446,10 +431,8 @@
                     </div>
                 </td>
                 <td>${codeNameHtml}</td>
-                <td>${formatNumber(price, 3)}</td>
-                <td class="${changeClass}">${formatPercent(change, 2)}</td>
-                <td>${formatNumber(nav, 4)}</td>
-                <td>${f.nav_date || '-'}</td>
+                <td style="text-align:center;">${priceChangeHtml}</td>
+                <td style="text-align:center;">${navDateHtml}</td>
                 <td>${formatNumber(estNav, 4)}</td>
                 <td class="${premiumClass}">${formatPercent(premium, 2)}</td>
                 <td class="${estPremClass}">${formatPercent(estPrem, 2)}</td>
@@ -467,10 +450,10 @@
         }
     }
 
-    // ============ 加载数据 ============
+    // ---------- 加载数据 ----------
     async function loadImportantFunds() {
         const tbody = document.getElementById('importantTableBody');
-        tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;">加载中...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;">加载中...</td></tr>';
         try {
             loadImportantFromLocal();
             loadHotFromLocal();
@@ -494,11 +477,11 @@
             updateSortIndicators();
         } catch (err) {
             console.error('加载失败:', err);
-            tbody.innerHTML = '<tr><td colspan="15">加载失败，请检查网络</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="13">加载失败，请检查网络</td></tr>';
         }
     }
 
-    // ============ 排序设置 ============
+    // ---------- 排序设置 ----------
     function setupSorting() {
         document.querySelectorAll('#importantTable th[data-sort]').forEach(th => {
             th.addEventListener('click', () => {
@@ -518,7 +501,6 @@
         });
     }
 
-    // ============ 初始化 ============
     window.onload = () => {
         loadImportantFromLocal();
         loadHotFromLocal();
