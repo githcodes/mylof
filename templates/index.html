@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=0.3, maximum-scale=5.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=0.4, maximum-scale=5.0, user-scalable=yes">
     <title>LOF基金数据看板</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -159,6 +159,28 @@
             .filters .search-input { width: 100%; }
             .filters input[type="number"] { width: 50px; }
         }
+
+                    /* ===== 方案4：收缩“基金”列到最小宽度，超出截断 ===== */
+        /* 假设“基金”列是表格的第3列（复选框、星标、基金） */
+        #fundTable th:nth-child(3),
+        #fundTable td:nth-child(3) {
+            width: 1%;                /* 尽可能收缩 */
+            max-width: 150px;         /* 限制最大宽度，可根据需要调整（如 120px、180px） */
+            white-space: nowrap;      /* 禁止换行 */
+            overflow: hidden;         /* 超出隐藏 */
+            text-overflow: ellipsis;  /* 显示省略号 */
+        }
+
+        /* 手机端进一步缩小 */
+        @media (max-width: 768px) {
+            #fundTable th:nth-child(3),
+            #fundTable td:nth-child(3) {
+                max-width: 80px;
+                font-size: 10px;      /* 手机端字体已较小，可保持 */
+            }
+        }
+
+        
     </style>
 </head>
 <body>
