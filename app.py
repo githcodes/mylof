@@ -4431,6 +4431,23 @@ def update_latest_history(fund_code):
             if not date_str:
                 return
 
+
+             # ===== 新增检查：如果该日已有净值，则跳过 =====
+            conn = get_db()
+            cursor = conn.cursor()
+            # 使用 PostgreSQL 占位符 %s（如果数据库是 SQLite 请改为 ?）
+            cursor.execute(
+                "SELECT nav FROM lof_history WHERE fund_code = %s AND date = %s",
+                (fund_code, date_str)
+            )
+            existing = cursor.fetchone()
+            conn.close()
+
+            if existing and existing['nav'] is not None:
+                print(f"基金 {fund_code} 在 {date_str} 已有净值 {existing['nav']}，跳过更新")
+                return
+            # ===== 检查结束 =====
+
             close = record['收盘价']
             nav = record['净值']
             index_change = record.get('指数涨幅')
@@ -4788,7 +4805,7 @@ scheduler.add_job(func=update_estimated_premium_rate, trigger="interval", minute
 scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour='9-15', minute='*/30', id='missing_funds_timer')
 # 每晚 22:00 运行一次缺失基金处理
 scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour=22, minute=0, id='missing_funds_night')
-# 每天凌晨21:30 执行全量最新数据更新
+# 每天22:30 执行全量最新数据更新
 scheduler.add_job(
     func=do_update_all_latest,
     trigger="cron",
@@ -4812,7 +4829,7 @@ scheduler.add_job(
     func=do_update_all_latest,
     trigger="cron",
     hour=9,
-    minute=15,
+    minute=45,
     id='morning_update_all'
 )
 
