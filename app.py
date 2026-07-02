@@ -274,6 +274,140 @@ def backfill_nav_from_nav_table():
     conn.close()
     print(f"净值回填完成，共更新 {updated} 条记录")
 
+
+def sync_nav_from_lof_funds_to_history():
+    """
+    将 lof_funds 中的最新净值同步到 lof_history 中 nav_date 匹配的记录。
+    更新字段：
+        - nav（净值）
+        - nav_change_pct（净值涨跌幅）
+        - premium_rate（溢价率）
+        - fund_shares（场内份额）
+        - shares_add（场内新增）
+        - shares_change（份额涨幅）
+        - jicha（基差）
+        - dongcha（动差）
+        - wucha（误差(K)）
+    若 lof_history 中无匹配记录，则跳过。
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # 获取所有有效净值
+    cursor.execute("""
+        SELECT fund_code, nav, nav_date
+        FROM lof_funds
+        WHERE nav IS NOT NULL AND nav_date IS NOT NULL
+    """)
+    funds = cursor.fetchall()
+    if not funds:
+        print("没有可用的净值数据")
+        conn.close()
+        return
+
+    updated = 0
+    for row in funds:
+        fund_code = row['fund_code']
+        new_nav = row['nav']
+        nav_date = row['nav_date']
+
+        # 查找 lof_history 中 nav_date 匹配的记录，并获取所需字段
+        cursor.execute(
+            "SELECT id, close_price, jigu, donggu, guzhi FROM lof_history WHERE fund_code = %s AND nav_date = %s",
+            (fund_code, nav_date)
+        )
+        hist_row = cursor.fetchone()
+        if not hist_row:
+            continue
+
+        history_id = hist_row['id']
+        close_price = hist_row['close_price']
+        jigu = hist_row['jigu']
+        donggu = hist_row['donggu']
+        guzhi = hist_row['guzhi']
+
+        # 1. 更新 nav
+        cursor.execute(
+            "UPDATE lof_history SET nav = %s WHERE id = %s",
+            (new_nav, history_id)
+        )
+
+        # 2. 计算并更新净值涨跌幅
+        cursor.execute("""
+            SELECT nav FROM lof_history
+            WHERE fund_code = %s AND date < %s AND nav IS NOT NULL
+            ORDER BY date DESC LIMIT 1
+        """, (fund_code, nav_date))
+        prev_row = cursor.fetchone()
+        if prev_row and prev_row['nav'] is not None and prev_row['nav'] != 0:
+            nav_change_pct = ((new_nav - prev_row['nav']) / prev_row['nav']) * 100
+        else:
+            nav_change_pct = None
+        cursor.execute(
+            "UPDATE lof_history SET nav_change_pct = %s WHERE id = %s",
+            (nav_change_pct, history_id)
+        )
+
+        # 3. 计算并更新溢价率
+        if close_price is not None and new_nav is not None and new_nav != 0:
+            premium_rate = (close_price / new_nav - 1) * 100
+        else:
+            premium_rate = None
+        cursor.execute(
+            "UPDATE lof_history SET premium_rate = %s WHERE id = %s",
+            (premium_rate, history_id)
+        )
+
+        # 4. 从 lof_funds_snapshot 获取份额数据（按 snapshot_date = nav_date）
+        cursor.execute("""
+            SELECT fund_shares, shares_add, shares_change
+            FROM lof_funds_snapshot
+            WHERE fund_code = %s AND snapshot_date = %s
+        """, (fund_code, nav_date))
+        snapshot_row = cursor.fetchone()
+        if snapshot_row:
+            cursor.execute(
+                "UPDATE lof_history SET fund_shares = %s, shares_add = %s, shares_change = %s WHERE id = %s",
+                (snapshot_row['fund_shares'], snapshot_row['shares_add'], snapshot_row['shares_change'], history_id)
+            )
+
+        # 5. 计算并更新基差 (jicha)
+        if jigu is not None and new_nav is not None and new_nav != 0:
+            jicha = ((jigu - new_nav) / new_nav) * 100
+        else:
+            jicha = None
+        cursor.execute(
+            "UPDATE lof_history SET jicha = %s WHERE id = %s",
+            (jicha, history_id)
+        )
+
+        # 6. 计算并更新动差 (dongcha)
+        if donggu is not None and new_nav is not None and new_nav != 0:
+            dongcha = ((donggu - new_nav) / new_nav) * 100
+        else:
+            dongcha = None
+        cursor.execute(
+            "UPDATE lof_history SET dongcha = %s WHERE id = %s",
+            (dongcha, history_id)
+        )
+
+        # 7. 计算并更新误差 (wucha)
+        if guzhi is not None and new_nav is not None and new_nav != 0:
+            wucha = ((guzhi - new_nav) / new_nav) * 100
+        else:
+            wucha = None
+        cursor.execute(
+            "UPDATE lof_history SET wucha = %s WHERE id = %s",
+            (wucha, history_id)
+        )
+
+        updated += 1
+
+    conn.commit()
+    conn.close()
+    print(f"✅ 同步完成，共更新 {updated} 条记录")
+
+
 def get_available_nav(fund_code: str, trade_date: str) -> tuple:
     """
     获取基金在交易日 trade_date 可用的净值。
@@ -4630,6 +4764,13 @@ def important():
     """重点基金页面 """
     return render_template('important.html')
 
+@app.route('/admin/sync_nav_to_history')
+def admin_sync_nav_to_history():
+    """手动触发 lof_funds → lof_history 净值同步（按 nav_date 匹配）"""
+    def task():
+        sync_nav_from_lof_funds_to_history()
+    threading.Thread(target=task).start()
+    return "✅ 已启动净值同步任务，请查看后台日志"
 
 # ---------- 定时任务 ----------
 scheduler = BackgroundScheduler()
