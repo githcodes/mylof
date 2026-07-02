@@ -4790,22 +4790,42 @@ def admin_sync_nav_to_history():
     return "✅ 已启动净值同步任务，请查看后台日志"
 
 # ---------- 定时任务 ----------
-scheduler = BackgroundScheduler()
-# 东方财富实时行情：每30分钟
+from apscheduler.schedulers.background import BackgroundScheduler
+from zoneinfo import ZoneInfo   # Python 3.9+ 内置
+
+# ---------- 定时任务 ----------
+# 设置调度器时区为北京时间
+scheduler = BackgroundScheduler(timezone=ZoneInfo('Asia/Shanghai'))
+
+# 东方财富实时行情：每20分钟（间隔任务不受时区影响）
 scheduler.add_job(func=fetch_realtime_data, trigger="interval", minutes=20, id='eastmoney')
-# AKShare 净值补充：每天23点
-scheduler.add_job(func=supplement_fund_details, trigger="cron", hour=23, minute=0, id='akshare')
+
 # 溢价率计算：每31分钟
 scheduler.add_job(func=update_premium_rate, trigger="interval", minutes=31, id='premium')
+
 # 估算净值：每32分钟
 scheduler.add_job(func=update_estimated_nav, trigger="interval", minutes=32, id='estimated_nav')
+
 # 估算溢价率：每33分钟
 scheduler.add_job(func=update_estimated_premium_rate, trigger="interval", minutes=33, id='estimated_premium')
-# 交易时段每30分钟运行一次（函数内部已做时段判断）
-scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour='9-15', minute='*/30', id='missing_funds_timer')
+
+# 交易时段（北京时间 9:00-16:00）每30分钟运行一次缺失基金处理
+scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour='9-16', minute='*/30', id='missing_funds_timer')
+
 # 每晚 22:00 运行一次缺失基金处理
 scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour=22, minute=0, id='missing_funds_night')
-# 每天22:30 执行全量最新数据更新
+
+# ---------- 净值补充（北京时间） ----------
+# 每天 23:00 补充净值
+scheduler.add_job(func=supplement_fund_details, trigger="cron", hour=23, minute=0, id='akshare')
+
+# 每天 19:00、20:00、22:00 补充净值（北京时间）
+scheduler.add_job(func=supplement_fund_details, trigger="cron", hour=19, minute=0, id='akshare_19')
+scheduler.add_job(func=supplement_fund_details, trigger="cron", hour=20, minute=0, id='akshare_20')
+scheduler.add_job(func=supplement_fund_details, trigger="cron", hour=22, minute=0, id='akshare_22')
+
+# ---------- 全量最新数据更新（北京时间） ----------
+# 每天 22:30 执行全量最新数据更新
 scheduler.add_job(
     func=do_update_all_latest,
     trigger="cron",
@@ -4813,7 +4833,6 @@ scheduler.add_job(
     minute=30,
     id='daily_update_all_latest'
 )
-print("已添加定时任务：每天凌晨 1:00 更新所有基金最新数据")
 
 # 早上 6:00 执行全量最新数据更新
 scheduler.add_job(
@@ -4824,7 +4843,7 @@ scheduler.add_job(
     id='morning_update_all_latest'
 )
 
-# 早上 9:15 执行全量最新数据更新
+# 早上 9:45 执行全量最新数据更新
 scheduler.add_job(
     func=do_update_all_latest,
     trigger="cron",
