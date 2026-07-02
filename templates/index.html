@@ -235,8 +235,9 @@
                     <th data-col="premium_rate">溢价率(%) <span class="sort-indicator"></span></th>
                     <th data-col="estimated_premium_rate">估算<br>溢价率(%) <span class="sort-indicator"></span></th>
                     <th data-col="daily_purchase_limit">日申购限额 <span class="sort-indicator"></span></th>
-                    <th data-col="volume_amount">成交额 <span class="sort-indicator"></span></th>
+                    
                     <th data-col="shares_add">份额新增<br>(万份) <span class="sort-indicator"></span></th>
+                    <th data-col="volume_amount">成交额 <span class="sort-indicator"></span></th>
                     <th data-col="total_market_value">总市值 <span class="sort-indicator"></span></th>
                     <th data-col="volume_hands">成交量(手) <span class="sort-indicator"></span></th>
                     <th>详情</th>
@@ -468,8 +469,9 @@
                 <td class="${premiumClass}">${formatNumber(premium, 2)}%</td>
                 <td class="${estPremClass}">${formatNumber(estPrem, 2)}%</td>
                 <td>${f.daily_limit_display}</td>
-                <td>${f.volume_amount_display}</td>
+                
                 <td>${formatNumber(safeNumber(f.shares_add), 2)}</td>
+                <td>${f.volume_amount_display}</td>
                 <td>${f.total_mv_display}</td>
                 <td>${formatNumber(volHands, 0)}</td>
                 <td><a href="/fund/${f.fund_code}" class="fund-link" target="_blank">详情</a></td>
