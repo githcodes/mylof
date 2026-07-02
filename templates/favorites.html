@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=0.3, maximum-scale=5.0, user-scalable=yes">
     <title>我的自选 - LOF看板</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -16,8 +16,30 @@
         .back-link:hover { background: #2c3e50; }
         .update-time { font-size: 12px; color: #666; }
         .table-wrapper { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; min-width: 1100px; }
-        th, td { padding: 6px 5px; text-align: left; border-bottom: 1px solid #ddd; white-space: nowrap; font-size: 12px; }
+        /* 表格基础 */
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+        }
+
+        /* 单元格：不换行，字体紧凑 */
+        th, td { 
+            padding: 6px 8px; 
+            text-align: left; 
+            border-bottom: 1px solid #ddd; 
+            white-space: nowrap;    /* 禁止换行 */
+            font-size: 11px; 
+        }
+        th { 
+            background: #2c3e50; 
+            color: white; 
+            position: sticky; 
+            top: 0; 
+            cursor: pointer; 
+            user-select: none; 
+            white-space: nowrap;   /* 表头同样不换行 */
+        }    
+
         th { background: #2c3e50; color: white; position: sticky; top: 0; cursor: pointer; user-select: none; }
         th:hover { background: #1e2b38; }
         th .sort-indicator { margin-left: 5px; font-size: 12px; display: inline-block; }
@@ -44,11 +66,15 @@
         @media (max-width: 768px) {
             body { padding: 8px; }
             .container { padding: 10px; }
-            th, td { font-size: 10px; padding: 2px 3px; }
             .toolbar { flex-direction: column; align-items: stretch; }
             .toolbar div { display: flex; flex-wrap: wrap; gap: 6px; }
             .back-link, .refresh-btn { font-size: 12px; padding: 4px 8px; }
-            table { min-width: 100%; }
+            table { min-width: 100%; }  /* 确保横向滚动 */
+            th, td { 
+                padding: 2px 3px; 
+                font-size: 10px; 
+                white-space: nowrap;    /* 保持不换行 */
+            }
             th:nth-child(9), td:nth-child(9) { display: none; }
             th:nth-child(10), td:nth-child(10) { display: none; }
             th:nth-child(12), td:nth-child(12) { display: none; }
@@ -75,7 +101,7 @@
                     <th class="star-col">⭐</th>
                     <th data-sort="fund_code">基金代码/名称 <span class="sort-indicator"></span></th>
                     <th data-sort="price_change" style="text-align:center;">价格/涨跌幅 <span class="sort-indicator"></span></th>
-                    <th data-sort="nav_date" style="text-align:center;">净值/日期 <span class="sort-indicator"></span></th>
+                    <th data-sort="nav_date" style="text-align:center;">日期/净值 <span class="sort-indicator"></span></th>
                     <th data-sort="estimated_nav">估算净值 <span class="sort-indicator"></span></th>
                     <th data-sort="premium_rate">溢价率(%) <span class="sort-indicator"></span></th>
                     <th data-sort="estimated_premium_rate">估算溢价率(%) <span class="sort-indicator"></span></th>

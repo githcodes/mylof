@@ -16,8 +16,29 @@
         .back-link:hover { background: #2c3e50; }
         .update-time { font-size: 12px; color: #666; }
         .table-wrapper { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; min-width: 1100px; }
-        th, td { padding: 6px 5px; text-align: left; border-bottom: 1px solid #ddd; white-space: nowrap; font-size: 12px; }
+        /* 表格基础 */
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+        }
+
+        /* 单元格：不换行，字体紧凑 */
+        th, td { 
+            padding: 6px 8px; 
+            text-align: left; 
+            border-bottom: 1px solid #ddd; 
+            white-space: nowrap;    /* 禁止换行 */
+            font-size: 11px; 
+        }
+        th { 
+            background: #2c3e50; 
+            color: white; 
+            position: sticky; 
+            top: 0; 
+            cursor: pointer; 
+            user-select: none; 
+            white-space: nowrap;   /* 表头同样不换行 */
+        }
         th { background: #2c3e50; color: white; position: sticky; top: 0; cursor: pointer; user-select: none; }
         th:hover { background: #1e2b38; }
         th .sort-indicator { margin-left: 5px; font-size: 12px; display: inline-block; }
@@ -100,11 +121,15 @@
         @media (max-width: 768px) {
             body { padding: 8px; }
             .container { padding: 10px; }
-            th, td { font-size: 10px; padding: 2px 3px; }
             .toolbar { flex-direction: column; align-items: stretch; }
             .toolbar div { display: flex; flex-wrap: wrap; gap: 6px; }
             .back-link, .refresh-btn { font-size: 12px; padding: 4px 8px; }
-            table { min-width: 100%; }
+            table { min-width: 100%; }  /* 确保横向滚动 */
+            th, td { 
+                padding: 2px 3px; 
+                font-size: 10px; 
+                white-space: nowrap;    /* 保持不换行 */
+            }
             th:nth-child(9), td:nth-child(9) { display: none; }
             th:nth-child(10), td:nth-child(10) { display: none; }
             th:nth-child(12), td:nth-child(12) { display: none; }
