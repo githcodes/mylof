@@ -373,9 +373,9 @@
 
             // 基金代码/名称
             let codeNameHtml = `<div style="display:flex; flex-direction:column; line-height:1.5;">
-                <a href="/fund/${f.fund_code}" class="fund-link ${codeClass}" target="_blank" style="font-weight:bold;">${f.fund_code || '-'}</a>
+                <a href="/fund/${f.fund_code}" class="fund-link ${codeClass}" target="_blank" style="font-weight:bold;">${f.fund_name || '-'}</a>
                 <span>`;
-            codeNameHtml += `<a href="/fund/${f.fund_code}" class="fund-link ${nameClass}" target="_blank">${f.fund_name || '-'}</a>`;
+            codeNameHtml += `<a href="/fund/${f.fund_code}" class="fund-link ${nameClass}" target="_blank">${f.fund_code || '-'}</a>`;
             if (f.purchase_status && f.purchase_status.includes('暂停')) {
                 codeNameHtml += ` <span style="background-color: #ffeb3b; padding: 0 4px; border-radius: 2px; font-weight:bold;">暂停</span>`;
             }
