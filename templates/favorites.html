@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=0.3, maximum-scale=5.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=0.4, maximum-scale=5.0, user-scalable=yes">
     <title>我的自选 - LOF看板</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -16,31 +16,9 @@
         .back-link:hover { background: #2c3e50; }
         .update-time { font-size: 12px; color: #666; }
         .table-wrapper { overflow-x: auto; }
-        /* 表格基础 */
-        table { 
-            width: 100%; 
-            border-collapse: collapse; 
-        }
-
-        /* 单元格：不换行，字体紧凑 */
-        th, td { 
-            padding: 6px 8px; 
-            text-align: left; 
-            border-bottom: 1px solid #ddd; 
-            white-space: nowrap;    /* 禁止换行 */
-            font-size: 11px; 
-        }
-        th { 
-            background: #2c3e50; 
-            color: white; 
-            position: sticky; 
-            top: 0; 
-            cursor: pointer; 
-            user-select: none; 
-            white-space: nowrap;   /* 表头同样不换行 */
-        }    
-
-        th { background: #2c3e50; color: white; position: sticky; top: 0; cursor: pointer; user-select: none; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid #ddd; white-space: nowrap; font-size: 11px; }
+        th { background: #2c3e50; color: white; position: sticky; top: 0; cursor: pointer; user-select: none; white-space: nowrap; }
         th:hover { background: #1e2b38; }
         th .sort-indicator { margin-left: 5px; font-size: 12px; display: inline-block; }
         tr:hover { background: #f9f9f9; }
@@ -63,18 +41,28 @@
         .fund-link.important-fund a:hover {
             text-decoration: underline;
         }
+        /* 搜索框样式 */
+        .search-input {
+            padding: 6px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 13px;
+            height: 32px;
+            width: 200px;
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: #3498db;
+        }
         @media (max-width: 768px) {
             body { padding: 8px; }
             .container { padding: 10px; }
             .toolbar { flex-direction: column; align-items: stretch; }
             .toolbar div { display: flex; flex-wrap: wrap; gap: 6px; }
             .back-link, .refresh-btn { font-size: 12px; padding: 4px 8px; }
-            table { min-width: 100%; }  /* 确保横向滚动 */
-            th, td { 
-                padding: 2px 3px; 
-                font-size: 10px; 
-                white-space: nowrap;    /* 保持不换行 */
-            }
+            .search-input { width: 100%; font-size: 12px; }
+            table { min-width: 100%; }
+            th, td { padding: 2px 3px; font-size: 10px; white-space: nowrap; }
             th:nth-child(9), td:nth-child(9) { display: none; }
             th:nth-child(10), td:nth-child(10) { display: none; }
             th:nth-child(12), td:nth-child(12) { display: none; }
@@ -86,9 +74,11 @@
 <div class="container">
     <h1>⭐ 我的自选基金</h1>
     <div class="toolbar">
-        <div>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
             <a href="/" class="back-link">← 返回首页</a>
             <a href="/important" class="back-link" style="background:#e67e22;">❤️ 重点</a>
+            <!-- 新增搜索框 -->
+            <input type="text" id="searchInput" class="search-input" placeholder="🔍 搜索基金..." oninput="applySearch()">
             <button class="refresh-btn" onclick="loadFavorites()">🔄 刷新自选</button>
             <button class="refresh-btn" style="background:#e67e22;" onclick="toggleAllImportant()">⭐ 切换所有重要标记</button>
         </div>
@@ -125,8 +115,10 @@
     const STORAGE_KEY = 'lof_favorites';
     const IMPORTANT_STORAGE_KEY = 'lof_important_funds';
     let importantFunds = new Set();
-    let currentFavList = [];
+    let allFavFunds = [];           // 存储原始自选基金列表（未经搜索过滤）
+    let currentFavList = [];        // 经过搜索和排序后的列表
     let currentSort = { field: 'fund_code', order: 'asc' };
+    let searchText = '';            // 当前搜索关键词
 
     // ---------- 重点基金管理 ----------
     function loadImportantFunds() {
@@ -153,7 +145,7 @@
             showToast(`已标记为重点基金 ${fundCode}`);
         }
         saveImportantFunds();
-        renderTable();
+        loadFavorites(); // 刷新列表
     }
     function toggleAllImportant() {
         const allMarked = currentFavList.every(f => importantFunds.has(f.fund_code));
@@ -165,7 +157,7 @@
             showToast("已将所有自选基金标记为重点");
         }
         saveImportantFunds();
-        renderTable();
+        loadFavorites();
     }
 
     // ---------- 自选管理 ----------
@@ -228,7 +220,7 @@
         setTimeout(() => { toast.style.opacity = '0'; }, 3000);
     }
 
-    // ---------- 排序 ----------
+    // ---------- 排序逻辑 ----------
     function sortFavList(list, field, order) {
         return [...list].sort((a, b) => {
             let aVal, bVal;
@@ -243,11 +235,11 @@
                     bVal = b.fund_name || '';
                     if (order === 'asc') return aVal.localeCompare(bVal, 'zh');
                     else return bVal.localeCompare(aVal, 'zh');
-                case 'price_change': // 按价格排序（用 current_price）
+                case 'price_change':
                     aVal = safeNumber(a.current_price) ?? -Infinity;
                     bVal = safeNumber(b.current_price) ?? -Infinity;
                     break;
-                case 'nav_date': // 按净值排序（用 nav）
+                case 'nav_date':
                     aVal = safeNumber(a.nav) ?? -Infinity;
                     bVal = safeNumber(b.nav) ?? -Infinity;
                     break;
@@ -309,6 +301,36 @@
         });
     }
 
+    // ---------- 核心更新显示函数（过滤 + 排序 + 渲染） ----------
+    function updateDisplay() {
+        // 1. 根据搜索关键词过滤
+        let filtered = allFavFunds;
+        if (searchText.trim() !== '') {
+            const keyword = searchText.trim().toLowerCase();
+            filtered = filtered.filter(f => {
+                const code = (f.fund_code || '').toLowerCase();
+                const name = (f.fund_name || '').toLowerCase();
+                return code.includes(keyword) || name.includes(keyword);
+            });
+        }
+
+        // 2. 排序
+        filtered = sortFavList(filtered, currentSort.field, currentSort.order);
+
+        // 3. 赋值并渲染
+        currentFavList = filtered;
+        renderTable();
+        updateSortIndicators();
+    }
+
+    // ---------- 搜索触发函数 ----------
+    function applySearch() {
+        const input = document.getElementById('searchInput');
+        searchText = input.value;
+        updateDisplay();
+    }
+
+    // ---------- 渲染表格 ----------
     function renderTable() {
         const tbody = document.getElementById('favTableBody');
         if (!currentFavList.length) {
@@ -380,6 +402,7 @@
         }
     }
 
+    // ---------- 加载自选数据 ----------
     async function loadFavorites() {
         const tbody = document.getElementById('favTableBody');
         tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;">加载中...</td></tr>';
@@ -387,21 +410,21 @@
             const res = await fetch('/api/lof/list');
             if (!res.ok) throw new Error('获取数据失败');
             const allFunds = await res.json();
-            const favFunds = allFunds.filter(f => favoriteFunds.has(f.fund_code));
-            if (favFunds.length === 0) {
-                currentFavList = [];
-                renderTable();
-                return;
-            }
-            currentFavList = sortFavList(favFunds, currentSort.field, currentSort.order);
-            renderTable();
-            updateSortIndicators();
+            // 过滤出自选基金
+            allFavFunds = allFunds.filter(f => favoriteFunds.has(f.fund_code));
+            // 清空搜索框
+            const input = document.getElementById('searchInput');
+            input.value = '';
+            searchText = '';
+            // 应用显示（排序和搜索）
+            updateDisplay();
         } catch (err) {
             console.error('加载失败:', err);
             tbody.innerHTML = '<tr><td colspan="13">加载失败，请检查网络</td></tr>';
         }
     }
 
+    // ---------- 排序事件绑定 ----------
     function setupSorting() {
         document.querySelectorAll('#favTable th[data-sort]').forEach(th => {
             th.addEventListener('click', () => {
@@ -412,15 +435,13 @@
                     currentSort.field = field;
                     currentSort.order = 'asc';
                 }
-                if (currentFavList.length) {
-                    currentFavList = sortFavList(currentFavList, currentSort.field, currentSort.order);
-                    renderTable();
-                    updateSortIndicators();
-                }
+                // 应用排序（同时保留搜索过滤）
+                updateDisplay();
             });
         });
     }
 
+    // ---------- 初始化 ----------
     window.onload = () => {
         loadImportantFunds();
         loadFavoritesFromLocal();
