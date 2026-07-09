@@ -4845,7 +4845,7 @@ def run_combined_tasks():
 scheduler.add_job(
     func=run_combined_tasks,
     trigger="interval",
-    minutes=30,
+    minutes=20,
     id='combined_tasks',
     next_run_time=datetime.now(ZoneInfo('Asia/Shanghai'))  # 立即启动一次
 )
