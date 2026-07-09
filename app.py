@@ -4798,16 +4798,58 @@ from zoneinfo import ZoneInfo   # Python 3.9+ 内置
 scheduler = BackgroundScheduler(timezone=ZoneInfo('Asia/Shanghai'))
 
 # 东方财富实时行情：每20分钟（间隔任务不受时区影响）
-scheduler.add_job(func=fetch_realtime_data, trigger="interval", minutes=20, id='eastmoney')
+# ---------- 定时任务 ----------
+from apscheduler.schedulers.background import BackgroundScheduler
+from zoneinfo import ZoneInfo
+from datetime import datetime, timedelta
 
-# 溢价率计算：每31分钟
-scheduler.add_job(func=update_premium_rate, trigger="interval", minutes=31, id='premium')
+# 设置调度器时区为北京时间
+scheduler = BackgroundScheduler(timezone=ZoneInfo('Asia/Shanghai'))
 
-# 估算净值：每32分钟
-scheduler.add_job(func=update_estimated_nav, trigger="interval", minutes=32, id='estimated_nav')
+def run_combined_tasks():
+    """
+    合并任务：在交易时段按顺序执行四个数据更新函数
+    """
+    # 获取当前北京时间
+    beijing_now = datetime.now(ZoneInfo('Asia/Shanghai'))
+    # 判断是否在交易时段（9:00-16:00）
+    if 9 <= beijing_now.hour < 16:
+        print(f"{datetime.now()}: 交易时段，开始执行合并任务...")
+        try:
+            fetch_realtime_data()
+        except Exception as e:
+            print(f"fetch_realtime_data 执行失败: {e}")
+        try:
+            update_premium_rate()
+        except Exception as e:
+            print(f"update_premium_rate 执行失败: {e}")
+        try:
+            update_estimated_nav()
+        except Exception as e:
+            print(f"update_estimated_nav 执行失败: {e}")
+        try:
+            update_estimated_premium_rate()
+        except Exception as e:
+            print(f"update_estimated_premium_rate 执行失败: {e}")
+        print(f"{datetime.now()}: 合并任务执行完毕")
+    else:
+        print(f"非交易时段（当前北京时间 {beijing_now.hour}:{beijing_now.minute:02d}），跳过合并任务")
 
-# 估算溢价率：每33分钟
-scheduler.add_job(func=update_estimated_premium_rate, trigger="interval", minutes=33, id='estimated_premium')
+# 移除原有的四个独立任务（注释掉或删除）
+# scheduler.add_job(func=fetch_realtime_data, trigger="interval", minutes=20, id='eastmoney')
+# scheduler.add_job(func=update_premium_rate, trigger="interval", minutes=31, id='premium')
+# scheduler.add_job(func=update_estimated_nav, trigger="interval", minutes=32, id='estimated_nav')
+# scheduler.add_job(func=update_estimated_premium_rate, trigger="interval", minutes=33, id='estimated_premium')
+
+# 添加合并任务，每30分钟执行一次
+scheduler.add_job(
+    func=run_combined_tasks,
+    trigger="interval",
+    minutes=30,
+    id='combined_tasks',
+    next_run_time=datetime.now(ZoneInfo('Asia/Shanghai'))  # 立即启动一次
+)
+
 
 # 交易时段（北京时间 9:00-16:00）每30分钟运行一次缺失基金处理
 scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour='9-16', minute='*/30', id='missing_funds_timer')
