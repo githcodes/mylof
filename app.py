@@ -4790,12 +4790,6 @@ def admin_sync_nav_to_history():
     return "✅ 已启动净值同步任务，请查看后台日志"
 
 # ---------- 定时任务 ----------
-from apscheduler.schedulers.background import BackgroundScheduler
-from zoneinfo import ZoneInfo   # Python 3.9+ 内置
-
-# ---------- 定时任务 ----------
-# 设置调度器时区为北京时间
-scheduler = BackgroundScheduler(timezone=ZoneInfo('Asia/Shanghai'))
 
 # 东方财富实时行情：每20分钟（间隔任务不受时区影响）
 # ---------- 定时任务 ----------
