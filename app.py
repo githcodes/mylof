@@ -4852,13 +4852,25 @@ scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour='9-1
 scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour=22, minute=0, id='missing_funds_night')
 
 # ---------- 净值补充（北京时间） ----------
-# 每天 23:00 补充净值
-scheduler.add_job(func=supplement_fund_details, trigger="cron", hour=23, minute=0, id='akshare')
+def supplement_and_update_premium():
+    """补充净值并更新溢价率（组合任务）"""
+    try:
+        supplement_fund_details()
+    except Exception as e:
+        print(f"补充净值失败: {e}")
+    try:
+        update_premium_rate()
+    except Exception as e:
+        print(f"更新溢价率失败: {e}")
 
-# 每天 19:00、20:00、22:00 补充净值（北京时间）
-scheduler.add_job(func=supplement_fund_details, trigger="cron", hour=19, minute=0, id='akshare_19')
-scheduler.add_job(func=supplement_fund_details, trigger="cron", hour=20, minute=0, id='akshare_20')
-scheduler.add_job(func=supplement_fund_details, trigger="cron", hour=22, minute=0, id='akshare_22')
+
+# 每天 19:00、20:00、22:00 23:00补充净值（北京时间）
+scheduler.add_job(func=supplement_and_update_premium, trigger="cron", hour=19, minute=0, id='akshare_19')
+scheduler.add_job(func=supplement_and_update_premium, trigger="cron", hour=20, minute=0, id='akshare_20')
+scheduler.add_job(func=supplement_and_update_premium, trigger="cron", hour=22, minute=0, id='akshare_22')
+scheduler.add_job(func=supplement_and_update_premium, trigger="cron", hour=23, minute=0, id='akshare_23')
+
+
 
 # ---------- 全量最新数据更新（北京时间） ----------
 # 每天 22:30 执行全量最新数据更新
