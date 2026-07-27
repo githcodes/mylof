@@ -4865,10 +4865,10 @@ def supplement_and_update_premium():
 
 
 # 每天 19:00、20:00、22:00 23:00补充净值（北京时间）
-scheduler.add_job(func=supplement_and_update_premium, trigger="cron", hour=19, minute=0, id='akshare_19')
-scheduler.add_job(func=supplement_and_update_premium, trigger="cron", hour=20, minute=0, id='akshare_20')
-scheduler.add_job(func=supplement_and_update_premium, trigger="cron", hour=22, minute=0, id='akshare_22')
-scheduler.add_job(func=supplement_and_update_premium, trigger="cron", hour=23, minute=0, id='akshare_23')
+scheduler.add_job(func=supplement_and_update_premium, trigger="cron", hour=19, minute=30, id='akshare_19')
+scheduler.add_job(func=supplement_and_update_premium, trigger="cron", hour=20, minute=30, id='akshare_20')
+scheduler.add_job(func=supplement_and_update_premium, trigger="cron", hour=22, minute=30, id='akshare_22')
+scheduler.add_job(func=supplement_and_update_premium, trigger="cron", hour=23, minute=30, id='akshare_23')
 
 
 
