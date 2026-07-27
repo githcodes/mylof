@@ -4846,7 +4846,7 @@ scheduler.add_job(
 
 
 # 交易时段（北京时间 9:00-16:00）每30分钟运行一次缺失基金处理
-scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour='9-16', minute='*/30', id='missing_funds_timer')
+scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour='8-16', minute='*/30', id='missing_funds_timer')
 
 # 每晚 22:00 运行一次缺失基金处理
 scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour=22, minute=0, id='missing_funds_night')
