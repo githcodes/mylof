@@ -3833,10 +3833,48 @@ def update_low_prices(fund_code=None, days=90, use_tencent=False):
             f.write('\n'.join(failed_funds))
     return total_updated, failed_funds
 
+def update_nav_change_pct():
+    """单独更新 lof_history 表中的净值涨跌幅 (nav_change_pct)"""
+    print(f"{datetime.now()}: 开始更新净值涨跌幅...")
+    conn = get_db()
+    cursor = conn.cursor()
 
+    cursor.execute("SELECT DISTINCT fund_code FROM lof_history WHERE nav IS NOT NULL ORDER BY fund_code")
+    funds = cursor.fetchall()
+    if not funds:
+        print("没有找到有净值数据的基金")
+        conn.close()
+        return
 
+    total_updated = 0
+    for row in funds:
+        fund_code = row['fund_code']
+        cursor.execute(
+            "SELECT id, date, nav FROM lof_history WHERE fund_code = %s AND nav IS NOT NULL ORDER BY date ASC",
+            (fund_code,)
+        )
+        records = cursor.fetchall()
+        if len(records) < 2:
+            continue
 
+        for i in range(1, len(records)):
+            current = records[i]
+            previous = records[i-1]
+            if previous['nav'] is not None and previous['nav'] != 0:
+                nav_change_pct = ((current['nav'] - previous['nav']) / previous['nav']) * 100
+            else:
+                nav_change_pct = None
 
+            cursor.execute(
+                "UPDATE lof_history SET nav_change_pct = %s WHERE id = %s",
+                (nav_change_pct, current['id'])
+            )
+            total_updated += 1
+
+        conn.commit()
+
+    conn.close()
+    print(f"✅ 净值涨跌幅更新完成，共更新 {total_updated} 条记录")
 
 
 
@@ -4016,6 +4054,7 @@ def insert_or_replace_lof_history_basic(
     except Exception as e:
         logging.error(f"基础写入 lof_history 失败 {fund_code} {date}: {e}")
         return False
+
 
 
 @app.route('/admin/backfill_yesterday_nav')
@@ -4256,7 +4295,6 @@ def api_list():
 
 
 
-@app.route('/api/lof/history/<fund_code>')
 @app.route('/api/lof/history/<fund_code>')
 def api_history(fund_code):
     """API: 获取基金历史日线数据及所有衍生指标"""
@@ -4834,6 +4872,17 @@ def admin_sync_nav_to_history():
         sync_nav_from_lof_funds_to_history()
     threading.Thread(target=task).start()
     return "✅ 已启动净值同步任务，请查看后台日志"
+
+
+
+
+@app.route('/admin/update_nav_change_pct')
+def admin_update_nav_change_pct():
+    """手动触发更新所有基金的净值涨跌幅"""
+    def task():
+        update_nav_change_pct()
+    threading.Thread(target=task).start()
+    return "✅ 已启动净值涨跌幅更新任务，请查看后台日志"
 
 # ---------- 定时任务 ----------
 
