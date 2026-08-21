@@ -3709,35 +3709,29 @@ def get_tencent_history_low(fund_code, start_date=None, end_date=None):
         return pd.DataFrame()
 
 
+
 def update_low_prices(fund_code=None, days=90, use_tencent=False):
     """
-    从 AKShare（或腾讯备选）获取 LOF 基金历史最低价，更新到 lof_history 表。
+    从多个数据源获取 LOF 基金历史最低价，更新到 lof_history 表。
+    数据源顺序：AKShare -> 新浪 -> 腾讯
     :param fund_code: 指定基金代码，为 None 时更新所有基金
-    :param days: 获取最近 days 天的数据（仅用于限定范围，实际由数据源决定）
-    :param use_tencent: 强制使用腾讯接口（测试用）
+    :param days: 保留参数，暂未使用
+    :param use_tencent: 强制跳过 AKShare 和新浪，直接使用腾讯（测试）
     """
     import time
     import logging
-    
-    # 手动重试函数（替代 tenacity）
-    def fetch_akshare_with_retry(code, max_retries=3, delay=2):
-        """带重试的 AKShare 数据获取"""
-        for attempt in range(max_retries):
-            try:
-                df = ak.fund_lof_hist_em(symbol=code)
-                if df.empty:
-                    print(f"  {code}: AKShare 返回空数据 (尝试 {attempt+1}/{max_retries})")
-                    raise ValueError("空数据")
-                rename_map = {'日期': 'date', '最低': 'low'}
-                df.rename(columns=rename_map, inplace=True)
-                df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
-                return df[['date', 'low']]
-            except Exception as e:
-                print(f"  {code}: AKShare 尝试 {attempt+1}/{max_retries} 失败: {e}")
-                if attempt < max_retries - 1:
-                    time.sleep(delay)
-                else:
-                    raise  # 最后一次失败，抛出异常
+    from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
+
+    @retry(stop=stop_after_attempt(5), wait=wait_fixed(2),
+           retry=retry_if_exception_type((Exception,)))
+    def fetch_akshare_low(code):
+        df = ak.fund_lof_hist_em(symbol=code)
+        if df.empty:
+            raise ValueError(f"AKShare 返回空数据: {code}")
+        rename_map = {'日期': 'date', '最低': 'low'}
+        df.rename(columns=rename_map, inplace=True)
+        df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+        return df[['date', 'low']]
 
     if fund_code:
         codes = [fund_code]
@@ -3745,33 +3739,48 @@ def update_low_prices(fund_code=None, days=90, use_tencent=False):
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT fund_code FROM lof_funds")
-        codes = [row['fund_code'] for row in cursor.fetchall()]
+        codes = [row[0] for row in cursor.fetchall()]
         conn.close()
 
-    print(f"{datetime.now()}: 开始更新 {len(codes)} 只基金的最低价数据...")
+    logging.info(f"开始更新 {len(codes)} 只基金的最低价数据...")
     total_updated = 0
+    failed_funds = []
 
     for code in codes:
+        df = pd.DataFrame()
+        source = None
         try:
             if use_tencent:
-                raise Exception("强制使用腾讯接口")  # 跳过 AKShare
-
-            # 使用重试函数获取数据
-            df = fetch_akshare_with_retry(code)
-            
-            if df.empty:
-                print(f"  {code}: AKShare 无数据，尝试腾讯备选...")
-                df = get_tencent_history_low(code)
-
-        except Exception as e:
-            print(f"  {code}: AKShare 失败 ({e})，尝试腾讯备选...")
-            df = get_tencent_history_low(code)
+                raise Exception("强制使用腾讯接口")
+            df = fetch_akshare_low(code)
+            source = "AKShare"
+        except Exception as e1:
+            logging.warning(f"{code}: AKShare 失败 ({e1})，尝试新浪...")
+            try:
+                df = get_sina_history_low(code)
+                if not df.empty:
+                    source = "新浪"
+                else:
+                    raise ValueError("新浪返回空数据")
+            except Exception as e2:
+                logging.warning(f"{code}: 新浪失败 ({e2})，尝试腾讯备选...")
+                try:
+                    df = get_tencent_history_low(code)
+                    if not df.empty:
+                        source = "腾讯"
+                    else:
+                        raise ValueError("腾讯返回空数据")
+                except Exception as e3:
+                    logging.error(f"{code}: 所有数据源均失败: {e3}")
+                    failed_funds.append(code)
+                    continue
 
         if df.empty:
-            print(f"  {code}: 所有数据源均无数据，跳过")
+            logging.warning(f"{code}: 无数据，跳过")
+            failed_funds.append(code)
             continue
 
-        # 统一更新
+        # 更新数据库
         conn = get_db()
         cursor = conn.cursor()
         updated = 0
@@ -3782,17 +3791,30 @@ def update_low_prices(fund_code=None, days=90, use_tencent=False):
                 continue
             cursor.execute("""
                 UPDATE lof_history
-                SET low = %s
-                WHERE fund_code = %s AND date = %s
+                SET low = ?
+                WHERE fund_code = ? AND date = ?
             """, (float(low_val), code, date_str))
             updated += cursor.rowcount
         conn.commit()
         conn.close()
-        print(f"  {code}: 更新了 {updated} 条记录")
+        logging.info(f"  {code} ({source}): 更新了 {updated} 条记录")
         total_updated += updated
-        time.sleep(1)
+        time.sleep(1)  # 请求间隔增加到1秒
 
-    print(f"最低价数据更新完成，共更新 {total_updated} 条记录")
+    logging.info(f"最低价数据更新完成，共更新 {total_updated} 条记录")
+    if failed_funds:
+        logging.warning(f"以下基金更新失败: {failed_funds}")
+        # 可将失败列表保存到文件或数据库以便后续重试
+        with open('failed_low_update.txt', 'w') as f:
+            f.write('\n'.join(failed_funds))
+    return total_updated, failed_funds
+
+
+
+
+
+
+
 
 
 def backfill_yesterday_nav_for_missing_funds():
