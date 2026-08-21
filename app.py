@@ -3669,6 +3669,30 @@ def insert_or_replace_lof_history(
         return False
 
 
+def get_sina_history_low(fund_code, timeout=10):
+    """
+    从新浪获取基金历史最低价（备选接口）
+    返回 DataFrame 包含 date 和 low
+    """
+    # 新浪接口需要市场前缀
+    if fund_code.startswith(('5', '6')):
+        symbol = f'sh{fund_code}'
+    else:
+        symbol = f'sz{fund_code}'
+    try:
+        df = ak.fund_etf_hist_sina(symbol=symbol)
+        if df.empty:
+            return pd.DataFrame()
+        # 列名通常为：date, open, high, low, close, volume
+        df.rename(columns={'date': 'date', 'low': 'low'}, inplace=True)
+        df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+        return df[['date', 'low']]
+    except Exception as e:
+        logging.warning(f"新浪历史接口请求失败 {fund_code}: {e}")
+        return pd.DataFrame()
+
+
+
 def get_tencent_history_low(fund_code, start_date=None, end_date=None):
     """
     从腾讯获取基金历史最低价（备选接口，不稳定）
@@ -3739,7 +3763,7 @@ def update_low_prices(fund_code=None, days=90, use_tencent=False):
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT fund_code FROM lof_funds")
-        codes = [row[0] for row in cursor.fetchall()]
+        codes = [row['fund_code'] for row in cursor.fetchall()]
         conn.close()
 
     logging.info(f"开始更新 {len(codes)} 只基金的最低价数据...")
