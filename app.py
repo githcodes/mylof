@@ -3815,8 +3815,8 @@ def update_low_prices(fund_code=None, days=90, use_tencent=False):
                 continue
             cursor.execute("""
                 UPDATE lof_history
-                SET low = ?
-                WHERE fund_code = ? AND date = ?
+                SET low = %s
+                WHERE fund_code = %s AND date = %s
             """, (float(low_val), code, date_str))
             updated += cursor.rowcount
         conn.commit()
