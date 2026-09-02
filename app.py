@@ -3330,8 +3330,9 @@ def fetch_jisilu_history(fund_code, days=365):
     session.mount('https://', HTTPAdapter(max_retries=retries))
 
     # ===== 临时硬编码 Cookie（请替换为你自己的值） =====
-    session.cookies.set('kbzw__user_login', '7Obd08_P1ebax9aXutHaxuqYrqXR0dTn8OTb3crUjaaSrq7YrJXTl6yy2KCppK3Er5OrqdfZkaHEpKqpodrSmJ2j1uDb0dWMopGsqq2KtJm4ttS-oqiqsJmjlKixqp-ap6Snyr_UoqSvmaiaqq2tnq-Nso_JtdXUnq_FpJPYrtvK3c2ulqqR3azXsZKhgq-myqrXyaKv5dvg49_ZkKWPpJmd0snU5tDbnJe6w82B2bHc6OPOmbvKgqeZ1qyT5MrbxpTG1syZu8qCzoqXuOPozdW42dvA0u2brZKrj6ilpK2BmKy8zcK1pYzjy-HGl77Y28zfipTP2tvs1ebQpZKvpaiYrt_D3eXamKqhvJOqmZfK1N7C4sqjr6Wdp50.')
-    session.cookies.set('kbzw__Session', '458ajive20pve41ngkdff0r9l6')
+    # 硬编码 Cookie（请替换成你自己的真实值，否则测试会失败）
+    USER_LOGIN = "7Obd08_P1ebax9aXutHaxuqYrqXR0dTn8OTb3crUjaaSrq7YrJXTl6yy2KCppK3Er5OrqdfZkaHEpKqpodrSmJ2j1uDb0dWMopGsqq2KtJm4ttS-oqiqsJmjlKixqp-ap6Snyr_UoqSvmaiaqq2tnq-Nso_JtdXUnq_FpJPYrtvK3c2ulqqR3azXsZKhgq-myqrXyaKv5dvg49_ZkKWPpJmd0snU5tDbnJe6w82B2bHc6OPOmbvKgqeZ1qyT5MrbxpTG1syZu8qCzoqXuOPozdW42dvA0u2brZKrj6ilpK2BmKy8zcK1pYzjy-HGl77Y28zfipTP2tvs1ebQpZKvpaiYrt_D3eXamKqhvJOqmZfK1N7C4sqjr6Wdp50."
+    SESSION = "ofvu08ih7hmotelhrs0nfkaom5"
     print("✅ 已加载硬编码 Cookie（临时测试用）")
     # =====================================================
 
@@ -3453,25 +3454,45 @@ def update_all_jisilu_multithread(max_workers=5):
 
 def fetch_latest_jisilu_history(fund_code):
     """获取单只基金最近集思录历史数据（用于增量更新）"""
+    import os
+    from datetime import datetime, timedelta
+    import requests
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.retry import Retry
+
     end_date = datetime.now().strftime('%Y-%m-%d')
     start_date = (datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d')
+
     session = requests.Session()
     retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
     session.mount('https://', HTTPAdapter(max_retries=retries))
+
+    # ===== 硬编码 Cookie（与 fetch_jisilu_history 保持一致） =====
+    session.cookies.set('kbzw__user_login', '7Obd08_P1ebax9aXutHaxuqYrqXR0dTn8OTb3crUjaaSrq7YrJXTl6yy2KCppK3Er5OrqdfZkaHEpKqpodrSmJ2j1uDb0dWMopGsqq2KtJm4ttS-oqiqsJmjlKixqp-ap6Snyr_UoqSvmaiaqq2tnq-Nso_JtdXUnq_FpJPYrtvK3c2ulqqR3azXsZKhgq-myqrXyaKv5dvg49_ZkKWPpJmd0snU5tDbnJe6w82B2bHc6OPOmbvKgqeZ1qyT5MrbxpTG1syZu8qCzoqXuOPozdW42dvA0u2brZKrj6ilpK2BmKy8zcK1pYzjy-HGl77Y28zfipTP2tvs1ebQpZKvpaiYrt_D3eXamKqhvJOqmZfK1N7C4sqjr6Wdp50.')
+    session.cookies.set('kbzw__Session', 'ofvu08ih7hmotelhrs0nfkaom5')
+    # =========================================================
+
+    # 设置完整的请求头（与测试成功版本一致）
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+        'Referer': 'https://www.jisilu.cn/',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        'X-Requested-With': 'XMLHttpRequest',
+    }
+
     url = f"https://www.jisilu.cn/data/lof/hist_list/{fund_code}"
     params = {'page': 1, 'size': 5, 'start': start_date, 'end': end_date}
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://www.jisilu.cn/',
-        'X-Requested-With': 'XMLHttpRequest'
-    }
+
     try:
         resp = session.get(url, params=params, headers=headers, timeout=15)
         resp.raise_for_status()
         data = resp.json()
         rows = data.get('rows', [])
         if not rows:
+            print(f"⚠️ {fund_code} 无数据")
             return None
+
         latest = None
         latest_date = None
         for item in rows:
@@ -3482,8 +3503,10 @@ def fetch_latest_jisilu_history(fund_code):
             if latest_date is None or date_str > latest_date:
                 latest_date = date_str
                 latest = cell
+
         if not latest:
             return None
+
         record = {
             '日期': latest.get('price_dt'),
             '收盘价': latest.get('price'),
@@ -3496,6 +3519,8 @@ def fetch_latest_jisilu_history(fund_code):
             '指数涨幅': latest.get('ref_increase_rt'),
             '净值日期': latest.get('net_value_dt'),
         }
+
+        # 转换数值类型
         if record['溢价率'] is not None:
             try:
                 record['溢价率'] = float(record['溢价率'])
@@ -3507,10 +3532,15 @@ def fetch_latest_jisilu_history(fund_code):
                     record[key] = float(record[key])
                 except:
                     record[key] = None
+
+        print(f"✅ {fund_code} 最新数据获取成功，日期 {record['日期']}")
         return record
+
     except Exception as e:
-        print(f"抓取 {fund_code} 最新数据失败: {e}")
+        print(f"❌ 抓取 {fund_code} 最新数据失败: {e}")
         return None
+
+
 
 def recalculate_fund_history(fund_code):
     """重新计算单只基金的历史派生字段（估值K、误差K、溢价率K），但不覆盖基估(K)"""
