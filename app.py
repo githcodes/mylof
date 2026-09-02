@@ -3306,26 +3306,59 @@ def calculate_dynamic_fields_for_fund(fund_code, lookback_days=25, decay=0.95, e
 
 
 # ---------- 集思录数据抓取（全量）----------
+
 def fetch_jisilu_history(fund_code, days=365):
-    """从集思录接口抓取指定基金的历史日线数据（最近 days 天）"""
+    """
+    从集思录接口抓取指定基金的历史日线数据（最近 days 天）
+    ⚠️ 当前为硬编码 Cookie 版本，仅用于临时测试！
+    测试通过后请立即改为环境变量，确保账户安全。
+    """
+    import time
+    import random
+    import requests
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.retry import Retry
+    import pandas as pd
+    from datetime import datetime, timedelta
+
     end_date = datetime.now().strftime('%Y-%m-%d')
     start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+
+    # 创建 Session 并设置重试策略
     session = requests.Session()
     retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
     session.mount('https://', HTTPAdapter(max_retries=retries))
+
+    # ===== 临时硬编码 Cookie（请替换为你自己的值） =====
+    session.cookies.set('kbzw__user_login', '7Obd08_P1ebax9aXutHaxuqYrqXR0dTn8OTb3crUjaaSrq7YrJXTl6yy2KCppK3Er5OrqdfZkaHEpKqpodrSmJ2j1uDb0dWMopGsqq2KtJm4ttS-oqiqsJmjlKixqp-ap6Snyr_UoqSvmaiaqq2tnq-Nso_JtdXUnq_FpJPYrtvK3c2ulqqR3azXsZKhgq-myqrXyaKv5dvg49_ZkKWPpJmd0snU5tDbnJe6w82B2bHc6OPOmbvKgqeZ1qyT5MrbxpTG1syZu8qCzoqXuOPozdW42dvA0u2brZKrj6ilpK2BmKy8zcK1pYzjy-HGl77Y28zfipTP2tvs1ebQpZKvpaiYrt_D3eXamKqhvJOqmZfK1N7C4sqjr6Wdp50.')
+    session.cookies.set('kbzw__Session', '458ajive20pve41ngkdff0r9l6')
+    print("✅ 已加载硬编码 Cookie（临时测试用）")
+    # =====================================================
+
+    # 设置完整的请求头
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+        'Referer': 'https://www.jisilu.cn/',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        'X-Requested-With': 'XMLHttpRequest',
+    }
+    session.headers.update(headers)
+
     base_url = f"https://www.jisilu.cn/data/lof/hist_list/{fund_code}"
     all_data = []
     page = 1
     page_size = 100
+
     while True:
-        params = {'page': page, 'size': page_size, 'start': start_date, 'end': end_date}
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Referer': 'https://www.jisilu.cn/',
-            'X-Requested-With': 'XMLHttpRequest'
+        params = {
+            'page': page,
+            'size': page_size,
+            'start': start_date,
+            'end': end_date,
         }
         try:
-            resp = session.get(base_url, params=params, headers=headers, timeout=15)
+            resp = session.get(base_url, params=params, timeout=15)
             resp.raise_for_status()
             data = resp.json()
             rows = data.get('rows', [])
@@ -3337,32 +3370,53 @@ def fetch_jisilu_history(fund_code, days=365):
             page += 1
             time.sleep(random.uniform(0.5, 1.0))
         except Exception as e:
-            print(f"抓取 {fund_code} 失败: {e}")
+            print(f"抓取 {fund_code} 第 {page} 页失败: {e}")
             break
     session.close()
+
     if not all_data:
+        print(f"⚠️ 未获取到 {fund_code} 的数据，可能接口已失效或 Cookie 无效")
         return pd.DataFrame()
+
+    # 解析数据
     records = [item['cell'] for item in all_data]
     df = pd.DataFrame(records)
+
+    # 列名映射
     rename_map = {
-        'price_dt': '日期', 'price': '收盘价', 'net_value': '净值', 'discount_rt': '溢价率',
-        'volume': '成交额(万元)', 'amount': '场内份额(万份)', 'amount_incr': '场内新增(万份)',
-        'amount_increase_rt': '份额涨幅', 'ref_increase_rt': '指数涨幅', 'net_value_dt': '净值日期'
+        'price_dt': '日期',
+        'price': '收盘价',
+        'net_value': '净值',
+        'discount_rt': '溢价率',
+        'volume': '成交额(万元)',
+        'amount': '场内份额(万份)',
+        'amount_incr': '场内新增(万份)',
+        'amount_increase_rt': '份额涨幅',
+        'ref_increase_rt': '指数涨幅',
+        'net_value_dt': '净值日期'
     }
     df.rename(columns=rename_map, inplace=True)
+
+    # 检查必要列是否存在
     required_cols = ['日期', '收盘价', '净值']
     if not all(col in df.columns for col in required_cols):
-        print(f"缺少必要列，实际列名: {df.columns.tolist()}")
+        print(f"❌ 缺少必要列，实际列名: {df.columns.tolist()}")
         return pd.DataFrame()
+
+    # 转换数据类型
     if '溢价率' in df.columns:
         df['溢价率'] = pd.to_numeric(df['溢价率'], errors='coerce')
-        # 注意：集思录返回的 discount_rt 可能是折价率（负数为溢价），此处直接使用
+
     df['日期'] = pd.to_datetime(df['日期']).dt.strftime('%Y-%m-%d')
-    # 初始化可能缺失的派生列
+
+    # 初始化可能缺失的派生列（与原有代码保持一致）
     for col in ['基估(K)', '基溢(K)', '基差(K)', '动估(K)', '动差(K)', '动溢(K)', '估值(K)', '误差(K)', '溢价率(K)', '重仓涨幅']:
         if col not in df.columns:
             df[col] = None
+
+    print(f"✅ {fund_code} 成功获取 {len(df)} 条记录")
     return df
+
 
 def update_single_jisilu_fund(fund_code):
     """抓取单只基金的集思录历史数据并保存为 CSV 文件"""
@@ -3734,7 +3788,7 @@ def get_tencent_history_low(fund_code, start_date=None, end_date=None):
 
 
 
-def update_low_prices(fund_code=None, days=90, use_tencent=False):
+def update_low_prices(fund_code=None, days=10, use_tencent=False):
     """
     从多个数据源获取 LOF 基金历史最低价，更新到 lof_history 表。
     数据源顺序：AKShare -> 新浪 -> 腾讯
