@@ -50,6 +50,8 @@ HISTORY_DATA_DIR = r"D:\jisilvlof"  # 历史 CSV 文件存放目录（本地路�
 os.makedirs(HISTORY_DATA_DIR, exist_ok=True)
 
 
+
+
 # ---------- 股票行情缓存 ----------
 stock_quote_cache = {}            # 缓存 {股票代码: (时间戳, 行情数据)}
 CACHE_TTL = 30                    # 缓存有效期30秒
@@ -150,6 +152,26 @@ def init_missing_funds():
 TRADING_DAYS_CACHE_FILE = 'trading_days_cache.json'
 TRADING_DAYS_SET = None      # 用于快速判断（集合）
 TRADING_DAYS_LIST = []       # 用于顺序查找（排序列表）
+
+
+# ---------- 集思录 Cookie（统一管理） ----------
+# 建议改为从环境变量读取，测试通过后请替换
+JISILU_USER_LOGIN = "7Obd08_P1ebax9aXutHaxuqYrqXR0dTn8OTb3crUjaaSrq7YrJXTl6yy2KCppK3Er5OrqdfZkaHEpKqpodrSmJ2j1uDb0dWMopGsqq2KtJm4ttS-oqiqsJmjlKixqp-ap6Snyr_UoqSvmaiaqq2tnq-Nso_JtdXUnq_FpJPYrtvK3c2ulqqR3azXsZKhgq-myqrXyaKv5dvg49_ZkKWPpJmd0snU5tDbnJe6w82B2bHc6OPOmbvKgqeZ1qyT5MrbxpTG1syZu8qCzoqXuOPozdW42dvA0u2brZKrj6ilpK2BmKy8zcK1pYzjy-HGl77Y28zfipTP2tvs1ebQpZKvpaiYrt_D3eXamKqhvJOqmZfK1N7C4sqjr6Wdp50."
+JISILU_SESSION = "ofvu08ih7hmotelhrs0nfkaom5"
+
+def get_jisilu_session():
+    """返回配置好集思录 Cookie 和请求头的 Session 对象"""
+    session = requests.Session()
+    session.cookies.set('kbzw__user_login', JISILU_USER_LOGIN)
+    session.cookies.set('kbzw__Session', JISILU_SESSION)
+    session.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+        'Referer': 'https://www.jisilu.cn/',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        'X-Requested-With': 'XMLHttpRequest',
+    })
+    return session
 
 def load_trading_days():
     """
@@ -2117,7 +2139,7 @@ def update_estimated_nav():
 
         def update_single_with_tt(code):
             """单只基金补充任务（线程安全）"""
-            result = fetch_estimated_nav_from_tiantian(code, retry=2)
+            result = fetch_estimated_nav_from_tiantian(code, retry=0)
             if result:
                 try:
                     conn = get_db()
@@ -3323,28 +3345,11 @@ def fetch_jisilu_history(fund_code, days=365):
 
     end_date = datetime.now().strftime('%Y-%m-%d')
     start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
-
-    # 创建 Session 并设置重试策略
-    session = requests.Session()
+    # 使用统一的 session
+    session = get_jisilu_session()
+    # 添加重试策略（可选）
     retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
     session.mount('https://', HTTPAdapter(max_retries=retries))
-
-    # ===== 临时硬编码 Cookie（请替换为你自己的值） =====
-    # 硬编码 Cookie（请替换成你自己的真实值，否则测试会失败）
-    USER_LOGIN = "7Obd08_P1ebax9aXutHaxuqYrqXR0dTn8OTb3crUjaaSrq7YrJXTl6yy2KCppK3Er5OrqdfZkaHEpKqpodrSmJ2j1uDb0dWMopGsqq2KtJm4ttS-oqiqsJmjlKixqp-ap6Snyr_UoqSvmaiaqq2tnq-Nso_JtdXUnq_FpJPYrtvK3c2ulqqR3azXsZKhgq-myqrXyaKv5dvg49_ZkKWPpJmd0snU5tDbnJe6w82B2bHc6OPOmbvKgqeZ1qyT5MrbxpTG1syZu8qCzoqXuOPozdW42dvA0u2brZKrj6ilpK2BmKy8zcK1pYzjy-HGl77Y28zfipTP2tvs1ebQpZKvpaiYrt_D3eXamKqhvJOqmZfK1N7C4sqjr6Wdp50."
-    SESSION = "ofvu08ih7hmotelhrs0nfkaom5"
-    print("✅ 已加载硬编码 Cookie（临时测试用）")
-    # =====================================================
-
-    # 设置完整的请求头
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
-        'Referer': 'https://www.jisilu.cn/',
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        'X-Requested-With': 'XMLHttpRequest',
-    }
-    session.headers.update(headers)
 
     base_url = f"https://www.jisilu.cn/data/lof/hist_list/{fund_code}"
     all_data = []
@@ -3463,29 +3468,16 @@ def fetch_latest_jisilu_history(fund_code):
     end_date = datetime.now().strftime('%Y-%m-%d')
     start_date = (datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d')
 
-    session = requests.Session()
+    # 使用统一的 session
+    session = get_jisilu_session()
     retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
     session.mount('https://', HTTPAdapter(max_retries=retries))
-
-    # ===== 硬编码 Cookie（与 fetch_jisilu_history 保持一致） =====
-    session.cookies.set('kbzw__user_login', '7Obd08_P1ebax9aXutHaxuqYrqXR0dTn8OTb3crUjaaSrq7YrJXTl6yy2KCppK3Er5OrqdfZkaHEpKqpodrSmJ2j1uDb0dWMopGsqq2KtJm4ttS-oqiqsJmjlKixqp-ap6Snyr_UoqSvmaiaqq2tnq-Nso_JtdXUnq_FpJPYrtvK3c2ulqqR3azXsZKhgq-myqrXyaKv5dvg49_ZkKWPpJmd0snU5tDbnJe6w82B2bHc6OPOmbvKgqeZ1qyT5MrbxpTG1syZu8qCzoqXuOPozdW42dvA0u2brZKrj6ilpK2BmKy8zcK1pYzjy-HGl77Y28zfipTP2tvs1ebQpZKvpaiYrt_D3eXamKqhvJOqmZfK1N7C4sqjr6Wdp50.')
-    session.cookies.set('kbzw__Session', 'ofvu08ih7hmotelhrs0nfkaom5')
-    # =========================================================
-
-    # 设置完整的请求头（与测试成功版本一致）
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
-        'Referer': 'https://www.jisilu.cn/',
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        'X-Requested-With': 'XMLHttpRequest',
-    }
 
     url = f"https://www.jisilu.cn/data/lof/hist_list/{fund_code}"
     params = {'page': 1, 'size': 5, 'start': start_date, 'end': end_date}
 
     try:
-        resp = session.get(url, params=params, headers=headers, timeout=15)
+        resp = session.get(url, params=params, timeout=15)
         resp.raise_for_status()
         data = resp.json()
         rows = data.get('rows', [])
@@ -4034,16 +4026,13 @@ def fetch_recent_jisilu_history(fund_code: str, days: int = 5) -> List[Dict]:
     """
     end_date = datetime.now().strftime('%Y-%m-%d')
     start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
-    session = requests.Session()
+
+    session = get_jisilu_session()
     retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
     session.mount('https://', HTTPAdapter(max_retries=retries))
+
     url = f"https://www.jisilu.cn/data/lof/hist_list/{fund_code}"
     params = {'page': 1, 'size': days, 'start': start_date, 'end': end_date}
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://www.jisilu.cn/',
-        'X-Requested-With': 'XMLHttpRequest'
-    }
     try:
         resp = session.get(url, params=params, headers=headers, timeout=15)
         resp.raise_for_status()
