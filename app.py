@@ -156,8 +156,8 @@ TRADING_DAYS_LIST = []       # 用于顺序查找（排序列表）
 
 # ---------- 集思录 Cookie（统一管理） ----------
 # 建议改为从环境变量读取，测试通过后请替换
-JISILU_USER_LOGIN = "7Obd08_P1ebax9aXutHaxuqYrqXR0dTn8OTb3crUjaaSrq7YrJXTl6yy2KCppK3Er5OrqdfZkaHEpKqpodrSmJ2j1uDb0dWMopGsqq2KtJm4ttS-oqiqsJmjmq2ppZ-ap6Snyr_UoqSvmamRprKlma-Nso_JtdXUnqmVp8XZr9nLrM6qla7G2qvZ3JLWgq-myqrXyaKv5dvg49_ZkKWPpJmdwOLa29Ht1JfFx5iSoI-ktJXA4tqtlrGB762noYGx0eTl2sDezsLL6pCsqqqmlKaBnMS9vca4o4LiyuLck7_G08zjopWs4d7mz9uQqKylppGekaKplbza0tjU35CsqqqmlKY."
-JISILU_SESSION = "pb6mc74sntb55r7tpvje7brlj0"
+USER_LOGIN = "7Obd08_P1ebax9aXutHaxuqYrqXR0dTn8OTb3crUjaaSrq7YrJXTl6yy2KCppK3Er5OrqdfZkaHEpKqpodrSmJ2j1uDb0dWMopGsqq2KtJm4ttS-oqiqsJmjmq2ppZ-ap6Snyr_UoqSvmamRprKlma-Nso_JtdXUnqmVp8XZr9nLrM6qla7G2qvZ3JLWgq-myqrXyaKv5dvg49_ZkKWPpJmdwOLa29Ht1JfFx5iSoI-ktJXA4tqtlrGB762noYGx0eTl2sDezsLL6pCsqqqmlKaBnMS9vca4o4LiyuLck7_G08zjopWs4d7mz9uQqKylppGekaKplbza0tjU35CsqqqmlKY."
+SESSION = "1rqv9j2jlavb83qc5fo6t8sqm5"
 
 def get_jisilu_session():
     """返回配置好集思录 Cookie 和请求头的 Session 对象"""
