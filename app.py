@@ -162,8 +162,8 @@ SESSION = "1rqv9j2jlavb83qc5fo6t8sqm5"
 def get_jisilu_session():
     """返回配置好集思录 Cookie 和请求头的 Session 对象"""
     session = requests.Session()
-    session.cookies.set('kbzw__user_login', JISILU_USER_LOGIN)
-    session.cookies.set('kbzw__Session', JISILU_SESSION)
+    session.cookies.set('kbzw__user_login', USER_LOGIN)
+    session.cookies.set('kbzw__Session', SESSION)
     session.headers.update({
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
         'Referer': 'https://www.jisilu.cn/',
