@@ -1,0 +1,35 @@
+name: Daily Cookie Updater
+
+on:
+  # 每天 UTC 时间 00:00 运行（即北京时间上午 8:00）
+  schedule:
+    - cron: '0 0 * * *'
+  # 允许手动触发，方便测试
+  workflow_dispatch:
+
+jobs:
+  update-cookie:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+
+    - name: 设置 Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: 安装依赖
+      run: |
+        pip install selenium psycopg2-binary webdriver-manager
+
+    - name: 安装 Chrome 和 ChromeDriver
+      uses: nanasess/setup-chromedriver@v2
+
+    - name: 运行更新脚本
+      env:
+        JISILU_USER: ${{ secrets.JISILU_USER }}
+        JISILU_PASSWORD: ${{ secrets.JISILU_PASSWORD }}
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      run: python update_cookies.py
