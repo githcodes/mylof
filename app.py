@@ -1225,6 +1225,21 @@ def init_db():
     ''')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_nav_code_date ON fund_nav(fund_code, nav_date)')
 
+
+    # 新增 cookies 表（用于存储 GitHub Actions 更新的 Cookie）
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS cookies (
+            id SERIAL PRIMARY KEY,
+            cookie_key VARCHAR(50) NOT NULL,
+            cookie_value TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute('''
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_cookie_key ON cookies (cookie_key)
+    ''')
+
+
     conn.commit()
     conn.close()
     print("PostgreSQL 数据库表初始化/升级完成")
