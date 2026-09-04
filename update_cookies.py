@@ -75,9 +75,32 @@ def get_cookies():
         else:
             raise Exception("未找到登录按钮")
 
-        # 等待 URL 不再包含 'login' 表示跳转成功
-        WebDriverWait(driver, 30).until(EC.url_contains('https://www.jisilu.cn/'))
-        print(f"✅ 登录成功，当前 URL: {driver.current_url}")
+                # 点击登录后，等待跳转到首页（通过 URL 判断或元素判断）
+        try:
+            # 等待 URL 变为根路径
+            WebDriverWait(driver, 30).until(lambda d: d.current_url == 'https://www.jisilu.cn/')
+            print(f"✅ 登录成功，当前 URL: {driver.current_url}")
+        except:
+            current_url = driver.current_url
+            if 'login' in current_url.lower():
+                print(f"❌ 登录失败，当前 URL 仍为登录页: {current_url}")
+                # 保存截图和页面源码以便调试
+                driver.save_screenshot('login_failed.png')
+                with open('page_source.html', 'w', encoding='utf-8') as f:
+                    f.write(driver.page_source)
+                raise Exception("登录失败，未能跳转")
+            else:
+                print(f"✅ 登录成功，当前 URL: {current_url}")
+
+        # 打印所有 Cookie 名称，确认是否包含 user_login
+        all_cookies = driver.get_cookies()
+        print("所有 Cookie 名称:", [c['name'] for c in all_cookies])
+        target_cookies = {}
+        for c in all_cookies:
+            if c['name'] in ['kbzw__Session', 'kbzw__user_login']:
+                target_cookies[c['name']] = c['value']
+        print(f"目标 Cookie: {list(target_cookies.keys())}")
+        return target_cookies
 
         # 提取需要的 Cookie
         all_cookies = driver.get_cookies()
