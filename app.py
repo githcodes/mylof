@@ -154,16 +154,55 @@ TRADING_DAYS_SET = None      # 用于快速判断（集合）
 TRADING_DAYS_LIST = []       # 用于顺序查找（排序列表）
 
 
+
+
+
+
+def load_cookies_from_db():
+    """
+    数据库 cookies 表加载最新的 kbzw__user_login 和 kbzw__Session。
+    如果查询失败或未找到，返回 None。
+    """
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT cookie_key, cookie_value FROM cookies WHERE cookie_key IN ('kbzw__user_login', 'kbzw__Session')")
+        rows = cursor.fetchall()
+        conn.close()
+        
+        cookies = {}
+        for row in rows:
+            cookies[row['cookie_key']] = row['cookie_value']
+        
+        # 检查是否两个都获取到
+        if 'kbzw__user_login' in cookies and 'kbzw__Session' in cookies:
+            return cookies['kbzw__user_login'], cookies['kbzw__Session']
+        else:
+            print("⚠️ 数据库中缺少必要的 Cookie 键")
+            return None, None
+    except Exception as e:
+        print(f"❌ 从数据库加载 Cookie 失败: {e}")
+        return None, None
+
 # ---------- 集思录 Cookie（统一管理） ----------
 # 建议改为从环境变量读取，测试通过后请替换
-USER_LOGIN = "7Obd08_P1ebax9aXutHaxuqYrqXR0dTn8OTb3crUjaaSrq7YrJXTl6yy2KCppK3Er5OrqdfZkaHEpKqpodrSmJ2j1uDb0dWMopGsqq2KtJm4ttS-oqiqsJmkmqiwrp2ap6Snyr_UoqSvmamSpq2soq2Nso_JtdXUntnG1cOs26mb383bkqnDr9qo3MTWgq-myqrXyaKv5dvg49_ZkKWPpJmdwOLa29Ht1JfFx5iSoI-ktJXA4tqtlrGB762noYGx0eTl2sDezsLL6pCsqqqmlKaBnMS9vca4o4LiyuLck7_G08zjopWs4d7mz9uQqKylppGekaKplbza0tjU35CsqqqmlKY."
-SESSION = "1kg59v1l8i76803a1oqqnbrre3"
+#USER_LOGIN = "7Obd08_P1ebax9aXutHaxuqYrqXR0dTn8OTb3crUjaaSrq7YrJXTl6yy2KCppK3Er5OrqdfZkaHEpKqpodrSmJ2j1uDb0dWMopGsqq2KtJm4ttS-oqiqsJmkmqiwrp2ap6Snyr_UoqSvmamSpq2soq2Nso_JtdXUntnG1cOs26mb383bkqnDr9qo3MTWgq-myqrXyaKv5dvg49_ZkKWPpJmdwOLa29Ht1JfFx5iSoI-ktJXA4tqtlrGB762noYGx0eTl2sDezsLL6pCsqqqmlKaBnMS9vca4o4LiyuLck7_G08zjopWs4d7mz9uQqKylppGekaKplbza0tjU35CsqqqmlKY."
+#SESSION = "1kg59v1l8i76803a1oqqnbrre3"
 
 def get_jisilu_session():
     """返回配置好集思录 Cookie 和请求头的 Session 对象"""
+    # 优先从数据库加载 Cookie
+    user_login, session_cookie = load_cookies_from_db()
+    
+    # 如果数据库加载失败，降级使用硬编码（可保留作为备份，或直接抛出异常）
+    if user_login is None or session_cookie is None:
+        print("⚠️ 从数据库加载 Cookie 失败，使用硬编码备份（请检查数据库）")
+        user_login = USER_LOGIN  # 保留原有的硬编码变量（建议删除，仅作降级）
+        session_cookie = SESSION
+    
     session = requests.Session()
-    session.cookies.set('kbzw__user_login', USER_LOGIN)
-    session.cookies.set('kbzw__Session', SESSION)
+    session.cookies.set('kbzw__user_login', user_login)
+    session.cookies.set('kbzw__Session', session_cookie)
     session.headers.update({
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
         'Referer': 'https://www.jisilu.cn/',
@@ -172,6 +211,8 @@ def get_jisilu_session():
         'X-Requested-With': 'XMLHttpRequest',
     })
     return session
+
+
 
 def load_trading_days():
     """
