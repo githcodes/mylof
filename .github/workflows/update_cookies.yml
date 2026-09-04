@@ -3,7 +3,9 @@ name: Daily Cookie Updater
 on:
   # 每天 UTC 时间 00:00 运行（即北京时间上午 8:00）
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 18 * * *'
+    - cron: '0 0 * * *'    # UTC 0:00 (北京时间 8:00)
+    - cron: '0 10 * * *'   # UTC 12:00 (北京时间 20:00)
   # 允许手动触发，方便测试
   workflow_dispatch:
 
