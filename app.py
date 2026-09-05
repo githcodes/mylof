@@ -156,25 +156,19 @@ TRADING_DAYS_LIST = []       # 用于顺序查找（排序列表）
 
 
 
-
-
 def load_cookies_from_db():
-    """
-    数据库 cookies 表加载最新的 kbzw__user_login 和 kbzw__Session。
-    如果查询失败或未找到，返回 None。
-    """
+    """从数据库 cookies 表加载最新的 kbzw__user_login 和 kbzw__Session"""
     try:
         conn = get_db()
+        # 为确保读取到最新提交的数据，执行一次 rollback 或 begin
+        conn.rollback()  # 强制开始一个新事务
         cursor = conn.cursor()
         cursor.execute("SELECT cookie_key, cookie_value FROM cookies WHERE cookie_key IN ('kbzw__user_login', 'kbzw__Session')")
         rows = cursor.fetchall()
         conn.close()
-        
         cookies = {}
         for row in rows:
             cookies[row['cookie_key']] = row['cookie_value']
-        
-        # 检查是否两个都获取到
         if 'kbzw__user_login' in cookies and 'kbzw__Session' in cookies:
             return cookies['kbzw__user_login'], cookies['kbzw__Session']
         else:
@@ -183,6 +177,10 @@ def load_cookies_from_db():
     except Exception as e:
         print(f"❌ 从数据库加载 Cookie 失败: {e}")
         return None, None
+
+
+
+
 
 # ---------- 集思录 Cookie（统一管理） ----------
 # 建议改为从环境变量读取，测试通过后请替换
@@ -217,30 +215,33 @@ _cookie_check_cache = {
 }
 
 def check_jisilu_cookie(session):
-    """
-    检测当前 session 的 Cookie 是否有效。
-    访问 https://www.jisilu.cn/user/ 如果返回 200 表示有效，否则无效。
-    带缓存，每10分钟才真正检测一次。
-    """
+    """检测当前 session 的 Cookie 是否有效，通过访问用户信息 API"""
     import datetime
     now = datetime.datetime.now()
-    # 检查缓存是否有效
+    # 缓存逻辑
     if _cookie_check_cache['last_check'] is not None:
         elapsed = (now - _cookie_check_cache['last_check']).total_seconds()
         if elapsed < _cookie_check_cache['cache_ttl']:
             return _cookie_check_cache['valid']
     
     try:
-        # 发送请求，禁止重定向，这样如果未登录会返回302或403
-        resp = session.get('https://www.jisilu.cn/user/', allow_redirects=False, timeout=10)
-        valid = (resp.status_code == 200)
-    except Exception:
+        # 尝试访问一个需要登录的 API（比如获取用户信息）
+        # 这里用 /user/ 也可以，但有时返回 302 也算重定向，我们用允许重定向并检查最终 URL
+        resp = session.get('https://www.jisilu.cn/user/', allow_redirects=True, timeout=10)
+        # 如果最终 URL 不包含 'login'，说明已登录
+        valid = 'login' not in resp.url
+        if valid:
+            print("✅ Cookie 有效")
+        else:
+            print("⚠️ Cookie 无效，被重定向到登录页")
+    except Exception as e:
+        print(f"⚠️ 检测 Cookie 时发生异常: {e}")
         valid = False
     
-    # 更新缓存
     _cookie_check_cache['valid'] = valid
     _cookie_check_cache['last_check'] = now
     return valid
+
 
 def trigger_github_action():
     """
@@ -276,45 +277,54 @@ def trigger_github_action():
         print(f"❌ 触发异常: {e}")
         return False
 
+
+# 全局变量用于触发冷却
+_last_trigger_time = 0
+
 def get_valid_jisilu_session():
-    """
-    获取有效的集思录 session。
-    如果失效，则触发 GitHub Actions 更新，并等待最多 50 秒重试。
-    返回 session 或 None。
-    """
+    global _last_trigger_time
     session = get_jisilu_session()
     
-    # 第一次快速检测
     if check_jisilu_cookie(session):
         return session
     
-    # 失效：触发更新
+    # 失效：检查冷却
+    now = time.time()
+    if now - _last_trigger_time < 300:  # 5分钟冷却
+        print("⏳ 距离上次触发不足 5 分钟，跳过触发，使用现有 Cookie（可能仍无效）")
+        return None
+    
     print("⚠️ Cookie 已失效，正在触发自动更新...")
     trigger_success = trigger_github_action()
-    if not trigger_success:
+    if trigger_success:
+        _last_trigger_time = now
+    else:
         print("❌ 触发更新失败，请检查 GITHUB_TOKEN 或网络")
         return None
     
-    # 等待并重试（总共 50 秒：10 次 × 5 秒）
+    # 等待并重试（10次 × 5秒 = 50秒）
     max_retries = 10
     wait_seconds = 5
     for attempt in range(1, max_retries + 1):
         print(f"⏳ 等待 {wait_seconds} 秒后重试 ({attempt}/{max_retries})...")
         time.sleep(wait_seconds)
         
-        # 强制刷新缓存，让 check_jisilu_cookie 重新检测
+        # 强制清除缓存
         global _cookie_check_cache
         _cookie_check_cache['last_check'] = None
         
-        # 重新从数据库加载 session
+        # 重新从数据库加载
         session = get_jisilu_session()
+        # 打印调试信息（Cookie 值的前 10 个字符）
+        sess_cookie = session.cookies.get('kbzw__Session', '')
+        print(f"🔍 当前 Session Cookie: {sess_cookie[:10]}... (长度 {len(sess_cookie)})")
         if check_jisilu_cookie(session):
             print("✅ Cookie 已更新，恢复有效")
             return session
     
-    # 超时仍未恢复
     print("❌ 等待 50 秒后 Cookie 仍未生效，请稍后手动重试")
     return None
+
 
 def load_trading_days():
     """
