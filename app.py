@@ -238,7 +238,7 @@ def check_jisilu_cookie(session):
             return _cookie_check_cache['valid']
     
     try:
-        resp = session.get('https://www.jisilu.cn/user/', allow_redirects=True, timeout=10)
+        resp = session.get('https://www.jisilu.cn/setting/profile/', allow_redirects=True, timeout=10)
         # 检查是否重定向到登录页
         if 'login' in resp.url.lower():
             valid = False
