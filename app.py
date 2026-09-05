@@ -3655,7 +3655,15 @@ def fetch_latest_jisilu_history(fund_code):
     try:
         resp = session.get(url, params=params, timeout=15)
         resp.raise_for_status()
+        print(f"📡 状态码: {resp.status_code}")
+        print(f"📄 响应前200字符: {resp.text[:200]}")
         data = resp.json()
+        try:
+            data = resp.json()
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON解析失败: {e}")
+            print(f"响应内容（前500字符）: {resp.text[:500]}")
+            return None 
         rows = data.get('rows', [])
         if not rows:
             print(f"⚠️ {fund_code} 无数据")
