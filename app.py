@@ -225,26 +225,27 @@ _cookie_check_cache = {
 
 def check_jisilu_cookie(session):
     """
-    检测当前 session 的 Cookie 是否有效。
-    通过访问 /user/ 页面并检查内容中的登录标识来判断。
+    检测 Cookie 是否有效：访问个人设置页，检查是否包含登录后特征
     """
     import datetime
     now = datetime.datetime.now()
-
-
+    # 缓存逻辑（避免频繁请求）
     if _cookie_check_cache['last_check'] is not None:
         elapsed = (now - _cookie_check_cache['last_check']).total_seconds()
         if elapsed < _cookie_check_cache['cache_ttl']:
             return _cookie_check_cache['valid']
     
     try:
+        # 访问个人设置页（必须登录才能访问）
         resp = session.get('https://www.jisilu.cn/setting/profile/', allow_redirects=True, timeout=10)
-        # 检查是否重定向到登录页
+        
+        # 检查是否被重定向到登录页
         if 'login' in resp.url.lower():
             valid = False
         else:
-            # 检查页面内容是否包含登录后特征
-            if '退出' in resp.text or '我的主页' in resp.text or '个人中心' in resp.text:
+            # 检查页面内容是否包含登录后特有的元素
+            # 从您的截图看，个人设置页包含 "基本资料"、"绑定手机" 等字样
+            if '基本资料' in resp.text or '绑定手机' in resp.text or '退出' in resp.text:
                 valid = True
             else:
                 valid = False
@@ -259,7 +260,6 @@ def check_jisilu_cookie(session):
     else:
         print("⚠️ Cookie 无效")
     return valid
-
 
 
 def trigger_github_action():
