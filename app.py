@@ -215,32 +215,42 @@ _cookie_check_cache = {
 }
 
 def check_jisilu_cookie(session):
-    """检测当前 session 的 Cookie 是否有效，通过访问用户信息 API"""
+    """
+    检测当前 session 的 Cookie 是否有效。
+    通过访问 /user/ 页面并检查内容中的登录标识来判断。
+    """
     import datetime
     now = datetime.datetime.now()
-    # 缓存逻辑
+
+    
     if _cookie_check_cache['last_check'] is not None:
         elapsed = (now - _cookie_check_cache['last_check']).total_seconds()
         if elapsed < _cookie_check_cache['cache_ttl']:
             return _cookie_check_cache['valid']
     
     try:
-        # 尝试访问一个需要登录的 API（比如获取用户信息）
-        # 这里用 /user/ 也可以，但有时返回 302 也算重定向，我们用允许重定向并检查最终 URL
         resp = session.get('https://www.jisilu.cn/user/', allow_redirects=True, timeout=10)
-        # 如果最终 URL 不包含 'login'，说明已登录
-        valid = 'login' not in resp.url
-        if valid:
-            print("✅ Cookie 有效")
+        # 检查是否重定向到登录页
+        if 'login' in resp.url.lower():
+            valid = False
         else:
-            print("⚠️ Cookie 无效，被重定向到登录页")
+            # 检查页面内容是否包含登录后特征
+            if '退出' in resp.text or '我的主页' in resp.text or '个人中心' in resp.text:
+                valid = True
+            else:
+                valid = False
     except Exception as e:
-        print(f"⚠️ 检测 Cookie 时发生异常: {e}")
+        print(f"⚠️ 检测 Cookie 时异常: {e}")
         valid = False
     
     _cookie_check_cache['valid'] = valid
     _cookie_check_cache['last_check'] = now
+    if valid:
+        print("✅ Cookie 有效")
+    else:
+        print("⚠️ Cookie 无效")
     return valid
+
 
 
 def trigger_github_action():
