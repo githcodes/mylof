@@ -268,7 +268,7 @@ def trigger_github_action():
         'Accept': 'application/vnd.github.v3+json'
     }
     data = {
-        'ref': 'main'  # 指定分支，如果您的默认分支是 master 则改为 'master'
+        'ref': 'master'  # 指定分支，如果您的默认分支是 master 则改为 'master'
     }
     
     try:
@@ -4735,7 +4735,7 @@ def update_latest_history(fund_code):
     def task():
         try:
             record = fetch_latest_jisilu_history(fund_code)
-            if not record:
+            if record is None or record.empty:
                 print(f"未获取到 {fund_code} 的最新数据")
                 return
             date_str = record['日期']
