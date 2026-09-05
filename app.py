@@ -4984,6 +4984,8 @@ def do_update_all_latest():
         shares_add = record.get('场内新增(万份)')
         shares_change = record.get('份额涨幅')
 
+
+        low_value = None
         # 获取当日最低价
         if date_str == today:
             low_value = None
