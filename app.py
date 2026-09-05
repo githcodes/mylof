@@ -4761,9 +4761,12 @@ def update_latest_history(fund_code):
     def task():
         try:
             record = fetch_latest_jisilu_history(fund_code)
-            if record is None or record.empty:
+            if not record:   # 如果 record 是 None 或空字典，则跳过
                 print(f"未获取到 {fund_code} 的最新数据")
                 return
+            # 后续处理...
+        except Exception as e:
+        # ...
             date_str = record['日期']
             if not date_str:
                 return
