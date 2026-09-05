@@ -222,7 +222,7 @@ def check_jisilu_cookie(session):
     import datetime
     now = datetime.datetime.now()
 
-    
+
     if _cookie_check_cache['last_check'] is not None:
         elapsed = (now - _cookie_check_cache['last_check']).total_seconds()
         if elapsed < _cookie_check_cache['cache_ttl']:
@@ -293,17 +293,25 @@ _last_trigger_time = 0
 
 def get_valid_jisilu_session():
     global _last_trigger_time
+    # 先尝试从数据库加载 session
     session = get_jisilu_session()
-    
     if check_jisilu_cookie(session):
-        return session
+        return session  # 有效则直接返回
     
-    # 失效：检查冷却
+    # 无效：检查冷却
     now = time.time()
-    if now - _last_trigger_time < 300:  # 5分钟冷却
-        print("⏳ 距离上次触发不足 5 分钟，跳过触发，使用现有 Cookie（可能仍无效）")
-        return None
+    if now - _last_trigger_time < 300:  # 5分钟内
+        print("⏳ 距离上次触发不足 5 分钟，不触发新更新，但仍尝试重新加载数据库（可能已更新）")
+        # 再次从数据库加载（可能已经更新）
+        session = get_jisilu_session()
+        if check_jisilu_cookie(session):
+            print("✅ 数据库 Cookie 已更新，恢复有效")
+            return session
+        else:
+            print("❌ Cookie 仍然无效，请稍后手动刷新或等待冷却结束")
+            return None
     
+    # 冷却已过，触发更新
     print("⚠️ Cookie 已失效，正在触发自动更新...")
     trigger_success = trigger_github_action()
     if trigger_success:
@@ -313,28 +321,17 @@ def get_valid_jisilu_session():
         return None
     
     # 等待并重试（15次 × 5秒 = 75秒）
-    max_retries = 15
-    wait_seconds = 5
-    for attempt in range(1, max_retries + 1):
-        print(f"⏳ 等待 {wait_seconds} 秒后重试 ({attempt}/{max_retries})...")
-        time.sleep(wait_seconds)
-        
+    for attempt in range(1, 16):
+        time.sleep(5)
         # 强制清除缓存
-        global _cookie_check_cache
         _cookie_check_cache['last_check'] = None
-        
-        # 重新从数据库加载
         session = get_jisilu_session()
-        # 打印调试信息（Cookie 值的前 10 个字符）
-        sess_cookie = session.cookies.get('kbzw__Session', '')
-        print(f"🔍 当前 Session Cookie: {sess_cookie[:10]}... (长度 {len(sess_cookie)})")
         if check_jisilu_cookie(session):
             print("✅ Cookie 已更新，恢复有效")
             return session
     
-    print("❌ 等待 50 秒后 Cookie 仍未生效，请稍后手动重试")
+    print("❌ 等待超时，Cookie 仍未生效")
     return None
-
 
 def load_trading_days():
     """
@@ -4781,8 +4778,7 @@ def update_latest_history(fund_code):
             record = fetch_latest_jisilu_history(fund_code)
             if not record:   # 如果 record 是 None 或空字典，则跳过
                 print(f"未获取到 {fund_code} 的最新数据")
-                return
-            # 后续处理...
+                return   
         except Exception as e:
         # ...
             date_str = record['日期']
