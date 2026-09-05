@@ -155,13 +155,10 @@ TRADING_DAYS_LIST = []       # 用于顺序查找（排序列表）
 
 
 
-
 def load_cookies_from_db():
-    """从数据库 cookies 表加载最新的 kbzw__user_login 和 kbzw__Session"""
     try:
         conn = get_db()
-        # 为确保读取到最新提交的数据，执行一次 rollback 或 begin
-        conn.rollback()  # 强制开始一个新事务
+        conn.autocommit = True  # 关键：确保立即看到已提交的数据
         cursor = conn.cursor()
         cursor.execute("SELECT cookie_key, cookie_value FROM cookies WHERE cookie_key IN ('kbzw__user_login', 'kbzw__Session')")
         rows = cursor.fetchall()
@@ -177,7 +174,6 @@ def load_cookies_from_db():
     except Exception as e:
         print(f"❌ 从数据库加载 Cookie 失败: {e}")
         return None, None
-
 
 
 
@@ -293,6 +289,7 @@ _last_trigger_time = 0
 
 def get_valid_jisilu_session():
     global _last_trigger_time
+
     session = get_jisilu_session()
     
     if check_jisilu_cookie(session):
@@ -303,6 +300,7 @@ def get_valid_jisilu_session():
     if now - _last_trigger_time < 300:  # 5分钟冷却
         print("⏳ 距离上次触发不足 5 分钟，不触发新更新，但仍尝试重新加载数据库（可能已更新）")
         # 强制清除缓存，重新加载数据库
+        global _cookie_check_cache
         _cookie_check_cache['last_check'] = None
         session = get_jisilu_session()
         if check_jisilu_cookie(session):
@@ -321,8 +319,8 @@ def get_valid_jisilu_session():
         print("❌ 触发更新失败，请检查 GITHUB_TOKEN 或网络")
         return None
     
-    # 等待并重试（15次 × 5秒 = 75秒）
-    max_retries = 15
+    # 等待并重试（16次 × 5秒 = 80秒）
+    max_retries = 16
     wait_seconds = 5
     for attempt in range(1, max_retries + 1):
         print(f"⏳ 等待 {wait_seconds} 秒后重试 ({attempt}/{max_retries})...")
@@ -4781,49 +4779,53 @@ def update_latest_history(fund_code):
     def task():
         try:
             record = fetch_latest_jisilu_history(fund_code)
-            # 如果 record 是 None 或空，则跳过
+            # ----- 统一类型判断 -----
             if record is None:
-                print(f"未获取到 {fund_code} 的最新数据")
+                print(f"未获取到 {fund_code} 的最新数据 (返回 None)")
                 return
-            # 如果 record 是字典且不为空
-            if isinstance(record, dict) and record:
-                # 正常处理
-                date_str = record.get('日期')
-                if not date_str:
+            # 如果是 DataFrame
+            if hasattr(record, 'empty'):
+                if record.empty:
+                    print(f"未获取到 {fund_code} 的最新数据 (DataFrame 为空)")
                     return
-                # ... 后续处理
-            else:
-                print(f"⚠️ record 类型异常: {type(record)}，跳过")
-                return
-        except Exception as e:
-            print(f"❌ 更新失败: {e}")
-        finally:
-            updating_latest_funds.discard(fund_code)
+                # 如果是 DataFrame，转为字典（假设第一行）
+                if isinstance(record, pd.DataFrame):
+                    if len(record) == 0:
+                        return
+                    record = record.iloc[0].to_dict()
+            # 如果是字典
+            if isinstance(record, dict):
+                if not record:
+                    print(f"未获取到 {fund_code} 的最新数据 (空字典)")
+                    return
+            # 如果是列表
+            if isinstance(record, list):
+                if not record:
+                    print(f"未获取到 {fund_code} 的最新数据 (空列表)")
+                    return
+                # 假设列表第一个元素是字典
+                record = record[0] if record else {}
+                if not record:
+                    return
 
-
-            date_str = record['日期']
+            # 现在 record 保证是字典，安全访问
+            date_str = record.get('日期')
             if not date_str:
+                print(f"未获取到 {fund_code} 的有效日期")
                 return
 
-
-             # ===== 新增检查：如果该日已有净值，则跳过 =====
+            # 检查是否已有净值
             conn = get_db()
             cursor = conn.cursor()
-            # 使用 PostgreSQL 占位符 %s（如果数据库是 SQLite 请改为 ?）
-            cursor.execute(
-                "SELECT nav FROM lof_history WHERE fund_code = %s AND date = %s",
-                (fund_code, date_str)
-            )
+            cursor.execute("SELECT nav FROM lof_history WHERE fund_code = %s AND date = %s", (fund_code, date_str))
             existing = cursor.fetchone()
             conn.close()
-
             if existing and existing['nav'] is not None:
                 print(f"基金 {fund_code} 在 {date_str} 已有净值 {existing['nav']}，跳过更新")
                 return
-            # ===== 检查结束 =====
 
-            close = record['收盘价']
-            nav = record['净值']
+            close = record.get('收盘价')
+            nav = record.get('净值')
             index_change = record.get('指数涨幅')
             heavy_change = record.get('重仓涨幅')
             nav_date = record.get('净值日期')
@@ -4833,20 +4835,18 @@ def update_latest_history(fund_code):
             shares_add = record.get('场内新增(万份)')
             shares_change = record.get('份额涨幅')
 
-            # ---------- 新增：获取当日最低价 ----------
+            # 获取当日最低价
             today = datetime.now().strftime('%Y-%m-%d')
             low_value = None
-           
-            conn = get_db()
-            cursor = conn.cursor()
-            cursor.execute("SELECT day_low FROM lof_funds WHERE fund_code = %s", (fund_code,))
-            row = cursor.fetchone()
-            if row and row['day_low'] is not None:
-                low_value = row['day_low']
-            conn.close()
-            # -------------------------------------------------
+            if date_str == today:
+                conn = get_db()
+                cursor = conn.cursor()
+                cursor.execute("SELECT day_low FROM lof_funds WHERE fund_code = %s", (fund_code,))
+                row = cursor.fetchone()
+                if row and row['day_low'] is not None:
+                    low_value = row['day_low']
+                conn.close()
 
-            # 使用通用插入函数，传入 low
             success = insert_or_replace_lof_history(
                 fund_code=fund_code,
                 date=date_str,
@@ -4860,18 +4860,24 @@ def update_latest_history(fund_code):
                 fund_shares=shares,
                 shares_add=shares_add,
                 shares_change=shares_change,
-                low=low_value,   # 新增：传入最低价
+                low=low_value,
             )
             if success:
                 print(f"✅ 更新 {fund_code} 最新历史数据: {date_str}")
                 calculate_dynamic_fields_for_fund(fund_code)
             else:
                 print(f"❌ 更新 {fund_code} 最新历史数据失败")
+        except Exception as e:
+            print(f"❌ 更新 {fund_code} 最新历史数据异常: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             updating_latest_funds.discard(fund_code)
 
     threading.Thread(target=task).start()
     return f"已启动更新 {fund_code} 的最新历史数据"
+
+
 
 @app.route('/admin/update_jicha_all')
 def admin_update_jicha_all():
