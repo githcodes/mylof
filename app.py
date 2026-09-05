@@ -153,26 +153,29 @@ TRADING_DAYS_CACHE_FILE = 'trading_days_cache.json'
 TRADING_DAYS_SET = None      # 用于快速判断（集合）
 TRADING_DAYS_LIST = []       # 用于顺序查找（排序列表）
 
-
-
 def load_cookies_from_db():
+    """
+    从数据库 cookies 表加载最新的 kbzw__user_login 和 kbzw__Session
+    直接新建连接，避免缓存问题，并指定字典游标
+    """
     try:
         database_url = os.environ.get('DATABASE_URL')
         if not database_url:
             raise Exception("DATABASE_URL environment variable not set")
-        # 直接连接，不使用 get_db 的缓存/连接池
+        # 直接创建新连接，不使用 get_db()
         conn = psycopg2.connect(database_url, sslmode='require')
-        conn.autocommit = True
-        cursor = conn.cursor()
-        cursor.execute("SELECT cookie_key, cookie_value FROM cookies WHERE cookie_key IN ('kbzw__user_login', 'kbzw__Session')")
-        rows = cursor.fetchall()
+        # 关键：使用 RealDictCursor 使行返回字典
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT cookie_key, cookie_value FROM cookies WHERE cookie_key IN ('kbzw__user_login', 'kbzw__Session')")
+        rows = cur.fetchall()
         conn.close()
         cookies = {}
         for row in rows:
             cookies[row['cookie_key']] = row['cookie_value']
         if 'kbzw__user_login' in cookies and 'kbzw__Session' in cookies:
-            # 打印部分值用于调试
-            print(f"🔑 从数据库加载 Cookie: user_login={cookies['kbzw__user_login'][:10]}..., Session={cookies['kbzw__Session'][:10]}...")
+            login_preview = cookies['kbzw__user_login'][:10] if cookies['kbzw__user_login'] else 'None'
+            session_preview = cookies['kbzw__Session'][:10] if cookies['kbzw__Session'] else 'None'
+            print(f"🔑 从数据库加载 Cookie: user_login={login_preview}..., Session={session_preview}...")
             return cookies['kbzw__user_login'], cookies['kbzw__Session']
         else:
             print("⚠️ 数据库中缺少必要的 Cookie 键")
@@ -182,17 +185,25 @@ def load_cookies_from_db():
         return None, None
 
 
+
+
+
+
 # ---------- 集思录 Cookie（统一管理） ----------
 # 建议改为从环境变量读取，测试通过后请替换
 #USER_LOGIN = "7Obd08_P1ebax9aXutHaxuqYrqXR0dTn8OTb3crUjaaSrq7YrJXTl6yy2KCppK3Er5OrqdfZkaHEpKqpodrSmJ2j1uDb0dWMopGsqq2KtJm4ttS-oqiqsJmkmqiwrp2ap6Snyr_UoqSvmamSpq2soq2Nso_JtdXUntnG1cOs26mb383bkqnDr9qo3MTWgq-myqrXyaKv5dvg49_ZkKWPpJmdwOLa29Ht1JfFx5iSoI-ktJXA4tqtlrGB762noYGx0eTl2sDezsLL6pCsqqqmlKaBnMS9vca4o4LiyuLck7_G08zjopWs4d7mz9uQqKylppGekaKplbza0tjU35CsqqqmlKY."
 #SESSION = "1kg59v1l8i76803a1oqqnbrre3"
 
 def get_jisilu_session():
+    """返回配置好集思录 Cookie 和请求头的 Session 对象"""
     user_login, session_cookie = load_cookies_from_db()
-    print(f"🔧 构建 Session: user_login={user_login[:10] if user_login else 'None'}..., Session={session_cookie[:10] if session_cookie else 'None'}...")
     session = requests.Session()
-    session.cookies.set('kbzw__user_login', user_login)
-    session.cookies.set('kbzw__Session', session_cookie)
+    if user_login and session_cookie:
+        session.cookies.set('kbzw__user_login', user_login)
+        session.cookies.set('kbzw__Session', session_cookie)
+        print(f"🔧 构建 Session: user_login={user_login[:10]}..., Session={session_cookie[:10]}...")
+    else:
+        print("⚠️ Cookie 缺失，构建无 Cookie 的 Session")
     session.headers.update({
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
         'Referer': 'https://www.jisilu.cn/',
@@ -201,6 +212,7 @@ def get_jisilu_session():
         'X-Requested-With': 'XMLHttpRequest',
     })
     return session
+
 
 # 在 get_jisilu_session() 下方添加以下代码
 
