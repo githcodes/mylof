@@ -193,13 +193,6 @@ def get_jisilu_session():
     """返回配置好集思录 Cookie 和请求头的 Session 对象"""
     # 优先从数据库加载 Cookie
     user_login, session_cookie = load_cookies_from_db()
-    
-    # 如果数据库加载失败，降级使用硬编码（可保留作为备份，或直接抛出异常）
-    if user_login is None or session_cookie is None:
-        print("⚠️ 从数据库加载 Cookie 失败，使用硬编码备份（请检查数据库）")
-        user_login = USER_LOGIN  # 保留原有的硬编码变量（建议删除，仅作降级）
-        session_cookie = SESSION
-    
     session = requests.Session()
     session.cookies.set('kbzw__user_login', user_login)
     session.cookies.set('kbzw__Session', session_cookie)
@@ -285,20 +278,43 @@ def trigger_github_action():
 
 def get_valid_jisilu_session():
     """
-    获取一个有效的集思录 session。
-    如果当前 Cookie 有效，直接返回 session；
-    如果失效，则触发 GitHub Actions 更新，并返回 None。
+    获取有效的集思录 session。
+    如果失效，则触发 GitHub Actions 更新，并等待最多 50 秒重试。
+    返回 session 或 None。
     """
     session = get_jisilu_session()
+    
+    # 第一次快速检测
     if check_jisilu_cookie(session):
         return session
-    else:
-        print("⚠️ Cookie 已失效，正在触发自动更新...")
-        # 触发更新（只触发一次，不做等待）
-        trigger_github_action()
-        # 返回 None，调用方应当处理这种情况（例如返回友好提示）
+    
+    # 失效：触发更新
+    print("⚠️ Cookie 已失效，正在触发自动更新...")
+    trigger_success = trigger_github_action()
+    if not trigger_success:
+        print("❌ 触发更新失败，请检查 GITHUB_TOKEN 或网络")
         return None
-
+    
+    # 等待并重试（总共 50 秒：10 次 × 5 秒）
+    max_retries = 10
+    wait_seconds = 5
+    for attempt in range(1, max_retries + 1):
+        print(f"⏳ 等待 {wait_seconds} 秒后重试 ({attempt}/{max_retries})...")
+        time.sleep(wait_seconds)
+        
+        # 强制刷新缓存，让 check_jisilu_cookie 重新检测
+        global _cookie_check_cache
+        _cookie_check_cache['last_check'] = None
+        
+        # 重新从数据库加载 session
+        session = get_jisilu_session()
+        if check_jisilu_cookie(session):
+            print("✅ Cookie 已更新，恢复有效")
+            return session
+    
+    # 超时仍未恢复
+    print("❌ 等待 50 秒后 Cookie 仍未生效，请稍后手动重试")
+    return None
 
 def load_trading_days():
     """
