@@ -214,6 +214,92 @@ def get_jisilu_session():
 
 
 
+# 在 get_jisilu_session() 下方添加以下代码
+
+# 缓存检测结果，避免频繁检测（每5分钟检测一次）
+_cookie_check_cache = {
+    'valid': False,
+    'last_check': None,
+    'cache_ttl': 600  # 5秒？改为600秒（10分钟）
+}
+
+def check_jisilu_cookie(session):
+    """
+    检测当前 session 的 Cookie 是否有效。
+    访问 https://www.jisilu.cn/user/ 如果返回 200 表示有效，否则无效。
+    带缓存，每10分钟才真正检测一次。
+    """
+    import datetime
+    now = datetime.datetime.now()
+    # 检查缓存是否有效
+    if _cookie_check_cache['last_check'] is not None:
+        elapsed = (now - _cookie_check_cache['last_check']).total_seconds()
+        if elapsed < _cookie_check_cache['cache_ttl']:
+            return _cookie_check_cache['valid']
+    
+    try:
+        # 发送请求，禁止重定向，这样如果未登录会返回302或403
+        resp = session.get('https://www.jisilu.cn/user/', allow_redirects=False, timeout=10)
+        valid = (resp.status_code == 200)
+    except Exception:
+        valid = False
+    
+    # 更新缓存
+    _cookie_check_cache['valid'] = valid
+    _cookie_check_cache['last_check'] = now
+    return valid
+
+def trigger_github_action():
+    """
+    通过 GitHub API 触发名为 'update_cookies.yml' 的工作流。
+    返回 True 表示触发成功，False 表示失败。
+    """
+    token = os.environ.get('GITHUB_TOKEN')
+    if not token:
+        print("⚠️ GITHUB_TOKEN 环境变量未设置，无法触发更新")
+        return False
+    
+    repo = 'githcodes/mylof'  # 您的仓库名，格式为 '用户名/仓库名'
+    workflow_id = 'update_cookies.yml'  # 工作流文件名（与您的 .yml 文件名一致）
+    url = f'https://api.github.com/repos/{repo}/actions/workflows/{workflow_id}/dispatches'
+    
+    headers = {
+        'Authorization': f'token {token}',
+        'Accept': 'application/vnd.github.v3+json'
+    }
+    data = {
+        'ref': 'main'  # 指定分支，如果您的默认分支是 master 则改为 'master'
+    }
+    
+    try:
+        resp = requests.post(url, headers=headers, json=data, timeout=10)
+        if resp.status_code == 204:
+            print("✅ 已成功触发 GitHub Actions 更新 Cookie")
+            return True
+        else:
+            print(f"❌ 触发失败 (状态码 {resp.status_code}): {resp.text}")
+            return False
+    except Exception as e:
+        print(f"❌ 触发异常: {e}")
+        return False
+
+def get_valid_jisilu_session():
+    """
+    获取一个有效的集思录 session。
+    如果当前 Cookie 有效，直接返回 session；
+    如果失效，则触发 GitHub Actions 更新，并返回 None。
+    """
+    session = get_jisilu_session()
+    if check_jisilu_cookie(session):
+        return session
+    else:
+        print("⚠️ Cookie 已失效，正在触发自动更新...")
+        # 触发更新（只触发一次，不做等待）
+        trigger_github_action()
+        # 返回 None，调用方应当处理这种情况（例如返回友好提示）
+        return None
+
+
 def load_trading_days():
     """
     加载交易日历，优先从缓存读取，若无则从 AKShare 获取并缓存。
@@ -3402,7 +3488,11 @@ def fetch_jisilu_history(fund_code, days=365):
     end_date = datetime.now().strftime('%Y-%m-%d')
     start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
     # 使用统一的 session
-    session = get_jisilu_session()
+    session = get_valid_jisilu_session()
+    if session is None:
+        # 无法获取有效的 session，可以返回空数据或抛出异常
+        print("❌ Cookie 无效，触发更新中，请稍后重试")
+        return pd.DataFrame() 
     # 添加重试策略（可选）
     retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
     session.mount('https://', HTTPAdapter(max_retries=retries))
@@ -3525,7 +3615,11 @@ def fetch_latest_jisilu_history(fund_code):
     start_date = (datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d')
 
     # 使用统一的 session
-    session = get_jisilu_session()
+    session = get_valid_jisilu_session()
+    if session is None:
+        # 无法获取有效的 session，可以返回空数据或抛出异常
+        print("❌ Cookie 无效，触发更新中，请稍后重试")
+        return pd.DataFrame() 
     retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
     session.mount('https://', HTTPAdapter(max_retries=retries))
 
@@ -4083,7 +4177,11 @@ def fetch_recent_jisilu_history(fund_code: str, days: int = 5) -> List[Dict]:
     end_date = datetime.now().strftime('%Y-%m-%d')
     start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
 
-    session = get_jisilu_session()
+    session = get_valid_jisilu_session()
+    if session is None:
+        # 无法获取有效的 session，可以返回空数据或抛出异常
+        print("❌ Cookie 无效，触发更新中，请稍后重试")
+        return pd.DataFrame() 
     retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
     session.mount('https://', HTTPAdapter(max_retries=retries))
 
