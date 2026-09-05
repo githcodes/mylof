@@ -302,8 +302,8 @@ def get_valid_jisilu_session():
         print("❌ 触发更新失败，请检查 GITHUB_TOKEN 或网络")
         return None
     
-    # 等待并重试（10次 × 5秒 = 50秒）
-    max_retries = 10
+    # 等待并重试（15次 × 5秒 = 75秒）
+    max_retries = 15
     wait_seconds = 5
     for attempt in range(1, max_retries + 1):
         print(f"⏳ 等待 {wait_seconds} 秒后重试 ({attempt}/{max_retries})...")
