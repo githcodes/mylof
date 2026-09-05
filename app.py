@@ -293,19 +293,20 @@ _last_trigger_time = 0
 
 def get_valid_jisilu_session():
     global _last_trigger_time
-    # 先尝试从数据库加载 session
     session = get_jisilu_session()
-    if check_jisilu_cookie(session):
-        return session  # 有效则直接返回
     
-    # 无效：检查冷却
+    if check_jisilu_cookie(session):
+        return session
+    
+    # 失效：检查冷却
     now = time.time()
-    if now - _last_trigger_time < 300:  # 5分钟内
+    if now - _last_trigger_time < 300:  # 5分钟冷却
         print("⏳ 距离上次触发不足 5 分钟，不触发新更新，但仍尝试重新加载数据库（可能已更新）")
-        # 再次从数据库加载（可能已经更新）
+        # 强制清除缓存，重新加载数据库
+        _cookie_check_cache['last_check'] = None
         session = get_jisilu_session()
         if check_jisilu_cookie(session):
-            print("✅ 数据库 Cookie 已更新，恢复有效")
+            print("✅ 重新加载后 Cookie 有效")
             return session
         else:
             print("❌ Cookie 仍然无效，请稍后手动刷新或等待冷却结束")
@@ -321,9 +322,11 @@ def get_valid_jisilu_session():
         return None
     
     # 等待并重试（15次 × 5秒 = 75秒）
-    for attempt in range(1, 16):
-        time.sleep(5)
-        # 强制清除缓存
+    max_retries = 15
+    wait_seconds = 5
+    for attempt in range(1, max_retries + 1):
+        print(f"⏳ 等待 {wait_seconds} 秒后重试 ({attempt}/{max_retries})...")
+        time.sleep(wait_seconds)
         _cookie_check_cache['last_check'] = None
         session = get_jisilu_session()
         if check_jisilu_cookie(session):
@@ -332,6 +335,8 @@ def get_valid_jisilu_session():
     
     print("❌ 等待超时，Cookie 仍未生效")
     return None
+
+
 
 def load_trading_days():
     """
@@ -3652,7 +3657,7 @@ def fetch_latest_jisilu_history(fund_code):
     if session is None:
         # 无法获取有效的 session，可以返回空数据或抛出异常
         print("❌ Cookie 无效，触发更新中，请稍后重试")
-        return pd.DataFrame() 
+        return None 
     retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
     session.mount('https://', HTTPAdapter(max_retries=retries))
 
@@ -4776,11 +4781,26 @@ def update_latest_history(fund_code):
     def task():
         try:
             record = fetch_latest_jisilu_history(fund_code)
-            if not record:   # 如果 record 是 None 或空字典，则跳过
+            # 如果 record 是 None 或空，则跳过
+            if record is None:
                 print(f"未获取到 {fund_code} 的最新数据")
-                return   
+                return
+            # 如果 record 是字典且不为空
+            if isinstance(record, dict) and record:
+                # 正常处理
+                date_str = record.get('日期')
+                if not date_str:
+                    return
+                # ... 后续处理
+            else:
+                print(f"⚠️ record 类型异常: {type(record)}，跳过")
+                return
         except Exception as e:
-        # ...
+            print(f"❌ 更新失败: {e}")
+        finally:
+            updating_latest_funds.discard(fund_code)
+
+
             date_str = record['日期']
             if not date_str:
                 return
