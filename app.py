@@ -299,6 +299,8 @@ def trigger_github_action():
 
 # 全局变量用于触发冷却
 _last_trigger_time = 0
+import threading
+_trigger_lock = threading.Lock()
 
 def get_valid_jisilu_session():
     global _last_trigger_time
@@ -308,29 +310,30 @@ def get_valid_jisilu_session():
     if check_jisilu_cookie(session):
         return session
     
+    # 加锁，避免并发触发
+    with _trigger_lock:
     # 失效：检查冷却
-    now = time.time()
-    if now - _last_trigger_time < 300:  # 5分钟冷却
-        print("⏳ 距离上次触发不足 5 分钟，不触发新更新，但仍尝试重新加载数据库（可能已更新）")
-        # 强制清除缓存，重新加载数据库
-        global _cookie_check_cache
-        _cookie_check_cache['last_check'] = None
-        session = get_jisilu_session()
-        if check_jisilu_cookie(session):
-            print("✅ 重新加载后 Cookie 有效")
-            return session
+        now = time.time()
+        if now - _last_trigger_time < 300:  # 5分钟冷却
+            print("⏳ 距离上次触发不足 5 分钟，不触发新更新，但仍尝试重新加载数据库（可能已更新）")
+            # 强制清除缓存，重新加载数据库
+            _cookie_check_cache['last_check'] = None
+            session = get_jisilu_session()
+            if check_jisilu_cookie(session):
+                print("✅ 重新加载后 Cookie 有效")
+                return session
+            else:
+                print("❌ Cookie 仍然无效，请稍后手动刷新或等待冷却结束")
+                return None
+        
+        # 冷却已过，触发更新
+        print("⚠️ Cookie 已失效，正在触发自动更新...")
+        trigger_success = trigger_github_action()
+        if trigger_success:
+            _last_trigger_time = now
         else:
-            print("❌ Cookie 仍然无效，请稍后手动刷新或等待冷却结束")
+            print("❌ 触发更新失败，请检查 GITHUB_TOKEN 或网络")
             return None
-    
-    # 冷却已过，触发更新
-    print("⚠️ Cookie 已失效，正在触发自动更新...")
-    trigger_success = trigger_github_action()
-    if trigger_success:
-        _last_trigger_time = now
-    else:
-        print("❌ 触发更新失败，请检查 GITHUB_TOKEN 或网络")
-        return None
     
     # 等待并重试（16次 × 5秒 = 80秒）
     max_retries = 16
