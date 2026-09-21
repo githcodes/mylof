@@ -5291,6 +5291,15 @@ scheduler.add_job(
     id='daily_update_all_latest'
 )
 
+scheduler.add_job(
+    func=do_update_all_latest,
+    trigger="cron",
+    hour=22,
+    minute=50,
+    id='daily_update_all_latest1'
+)
+
+
 # 早上 6:00 执行全量最新数据更新
 scheduler.add_job(
     func=do_update_all_latest,
@@ -5298,6 +5307,14 @@ scheduler.add_job(
     hour=6,
     minute=0,
     id='morning_update_all_latest'
+)
+
+scheduler.add_job(
+    func=do_update_all_latest,
+    trigger="cron",
+    hour=6,
+    minute=10,
+    id='morning_update_all_latest1'
 )
 
 # 早上 9:45 执行全量最新数据更新
@@ -5311,9 +5328,12 @@ scheduler.add_job(
 
 # 早上 7:00 执行缺失基金高级处理
 scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour=7, minute=0, id='morning_process_missing')
+scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour=7, minute=30, id='morning_process_missing1')
+
 
 # 早上 9:30 执行缺失基金高级处理
 scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour=9, minute=30, id='morning_process')
+scheduler.add_job(func=process_missing_funds_advanced, trigger="cron", hour=9, minute=40, id='morning_process2')
 
 scheduler.start()
 
