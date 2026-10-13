@@ -543,7 +543,8 @@
         try {
             const res = await fetch('/api/lof/list');
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const funds = await res.json();
+            const text = await res.text();
+            const funds = JSON.parse(text.replace(/\bNaN\b/g, 'null'));   // ← 替换这里
             console.log('接口返回:', funds);          // 看原始数据
             console.log('条数:', funds.length);        // 看有几条
             allFunds = funds;

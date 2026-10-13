@@ -39,6 +39,7 @@ import bisect
 import psycopg2
 import psycopg2.extras
 from urllib.parse import urlparse
+import math
 
 # 日志配置
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -4538,6 +4539,13 @@ def detail(fund_code):
     """基金详情页面"""
     return render_template('detail.html', fund_code=fund_code)
 
+
+def clean_nan(v):
+    """把 float('nan') 转成 None，保证输出合法 JSON"""
+    if isinstance(v, float) and math.isnan(v):
+        return None
+    return v
+
 @app.route('/api/lof/list')
 def api_list():
     """API: 获取 LOF 基金列表及实时行情 + 最新份额新增"""
@@ -4571,7 +4579,8 @@ def api_list():
    
     result = []
     for row in rows:
-        d = dict(row)
+        # 关键：先把每个字段的 NaN 洗成 None
+        d = {k: clean_nan(v) for k, v in dict(row).items()}
         d['daily_limit_display'] = format_limit(d.get('daily_purchase_limit'))
         d['total_mv_display'] = format_amount(d.get('total_market_value'))
         d['volume_amount_display'] = format_amount(d.get('volume_amount'))
