@@ -4567,6 +4567,8 @@ def api_list():
         ORDER BY f.current_price DESC
     ''')
     rows = cursor.fetchall()
+    print(f"[api_list] 查询到 {len(rows)} 条记录")   # 看条数
+   
     result = []
     for row in rows:
         d = dict(row)
