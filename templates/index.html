@@ -544,6 +544,8 @@
             const res = await fetch('/api/lof/list');
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const funds = await res.json();
+            console.log('接口返回:', funds);          // 看原始数据
+            console.log('条数:', funds.length);        // 看有几条
             allFunds = funds;
             // 清空筛选条件
             document.getElementById('searchInput').value = '';
